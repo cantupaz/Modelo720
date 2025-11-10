@@ -8,11 +8,9 @@ from datetime import date
 from decimal import Decimal
 from io import StringIO
 
-from Modelo720.modelo720 import (
-    Modelo720, FieldSpec, Valoracion, ClaveBien, Origen,
-    HEADER_FIELDS, DETALLE_FIELDS, 
-    DeclarationValidationError
-)
+from Modelo720 import Modelo720, Valoracion, DeclarationValidationError, Modelo720FormatError, CSV720Error
+from Modelo720.modelo720 import FieldSpec, HEADER_FIELDS, DETALLE_FIELDS
+from Modelo720.declaracion import ClaveBien, Origen
 
 class TestFieldSpec(unittest.TestCase):
     """Test FieldSpec definitions and consistency."""
@@ -203,54 +201,61 @@ class TestDeclarationValidation(unittest.TestCase):
     
     def test_validate_basic_success(self):
         """Test basic validation passes for valid declaration."""
-        problems = self.declaration.validate()
-        self.assertEqual(problems, [])
+        try:
+            self.declaration.validate()
+        except DeclarationValidationError:
+            self.fail("validate() raised DeclarationValidationError unexpectedly")
     
     def test_validate_strict_success(self):
-        """Test strict validation passes for valid declaration."""
+        """Test validation passes for valid declaration."""
         try:
-            self.declaration.validate_strict()
+            self.declaration.validate()
         except DeclarationValidationError:
-            self.fail("validate_strict() raised DeclarationValidationError unexpectedly")
+            self.fail("validate() raised DeclarationValidationError unexpectedly")
     
     def test_validate_structure_failures(self):
         """Test structural validation catches basic errors."""
         # Test wrong tipo_registro
         self.header.tipo_registro = 2
-        problems = self.declaration.validate()
-        self.assertIn("Header tipo_registro must be 1", problems)
+        with self.assertRaises(DeclarationValidationError) as cm:
+            self.declaration.validate()
+        self.assertIn("Header tipo_registro must be 1", str(cm.exception))
         
         # Test wrong modelo
         self.header.tipo_registro = 1
         self.header.modelo = "730"
-        problems = self.declaration.validate()
-        self.assertIn("Modelo must be 720", problems)
+        with self.assertRaises(DeclarationValidationError) as cm:
+            self.declaration.validate()
+        self.assertIn("Modelo must be 720", str(cm.exception))
         
         # Test record count mismatch
         self.header.modelo = "720"
         self.header.numero_total_registros = 5
-        problems = self.declaration.validate()
-        self.assertIn("Número total de registros does not match detail count", problems)
+        with self.assertRaises(DeclarationValidationError) as cm:
+            self.declaration.validate()
+        self.assertIn("does not match detail count", str(cm.exception))
     
     def test_validate_business_rules(self):
-        """Test business rule validation in strict mode."""
+        """Test business rule validation."""
         # Test invalid NIF format
         self.header.numero_identificativo = "123"
-        problems = self.declaration.validate(strict=True)
-        self.assertIn("Header numero_identificativo must be 13 digits", problems)
+        with self.assertRaises(DeclarationValidationError) as cm:
+            self.declaration.validate()
+        self.assertIn("Header numero_identificativo must be 13 digits", str(cm.exception))
         
         # Test subclave rule for clave I
         self.header.numero_identificativo = "1234567890123"
         self.detalle.clave_tipo_bien = ClaveBien.I
         self.detalle.subclave = 1
-        problems = self.declaration.validate(strict=True)
-        self.assertIn("Detail 1: subclave must be 0 for clave 'I'", problems)
+        with self.assertRaises(DeclarationValidationError) as cm:
+            self.declaration.validate()
+        self.assertIn("Detail 1: subclave must be 0 for clave 'I'", str(cm.exception))
     
-    def test_validate_strict_raises_exception(self):
-        """Test validate_strict raises exception on errors."""
+    def test_validate_raises_exception(self):
+        """Test validate raises exception on errors."""
         self.header.tipo_registro = 2
         with self.assertRaises(DeclarationValidationError) as cm:
-            self.declaration.validate_strict()
+            self.declaration.validate()
         self.assertIn("Header tipo_registro must be 1", str(cm.exception))
 
 

@@ -1,16 +1,15 @@
-from Modelo720.modelo720 import Modelo720, to_dict
+from Modelo720 import Modelo720, DeclarationValidationError
 
 # Create parser instance
 parser = Modelo720()
 
 # Read fixed-width file 
 dec = parser.read_fixed_width("Y1234567Z.720")
-problems = dec.validate()
-if problems:
-    print("Invalid file:\n - " + "\n - ".join(problems))
-else:
+try:
+    dec.validate()
     print("Valid! Declarant:", dec.header.nif_declarante)
-    data = to_dict(dec)  # JSON-friendly structure
+except DeclarationValidationError as e:
+    print(f"Invalid file: {e}")
 
 # # Write to CSV
 parser.write_csv(dec, "output.csv")

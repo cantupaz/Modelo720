@@ -1,19 +1,22 @@
 """
-Parser and validator for Agencia Tributaria Modelo 720 fixed-width files.
+Parser for Agencia Tributaria Modelo 720 fixed-width and proprietary CSV files.
 
-Includes reading, validation, structured storage, and pretty printing of data.
+The fixed-width format is the official format used by the Agencia Tributaria for Modelo 720 declarations.
+
+The proprietary CSV format is an alternative format that is intended as an easy way to enter and read data. 
+The CSV format preserves all data fields and structure.
+
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_DOWN
 from enum import Enum
 from typing import Iterable, List, Optional, Union, TextIO
 import re
 
-# LINE_LEN = 500
-MODEL_CODE = "720"
+from .declaracion import Declaration, MODEL_CODE, ClaveBien, Origen, Valoracion, Header720, Detalle720, DeclarationValidationError
 
 @dataclass
 class FieldSpec:
@@ -25,179 +28,6 @@ class FieldSpec:
     enum_class: Optional[type] = None  # For enum transforms
     required: bool = True
     csv_include: bool = True
-
-class ClaveBien(str, Enum):
-    C = "C"     # Cuentas bancarias o credito
-    V = "V"     # Valores y derechos
-    I = "I"     # Inmuebles
-    S = "S"     # Seguros
-    B = "B"     # Bienes muebles
-
-class Origen(str, Enum):
-    A = "A"     # Adquisición (bien que se declara por primera vez)
-    M = "M"     # Modificación
-    C = "C"     # Cancelación (se extingue la titularidad)  
-
-@dataclass
-class Valoracion:
-    signo: str
-    importe: Decimal
-
-@dataclass
-class Header720:
-    tipo_registro: int
-    modelo: str
-    ejercicio: int
-    nif_declarante: str
-    nombre_razon: str
-    tipo_soporte: str
-    telefono_contacto: Optional[str]
-    persona_contacto: Optional[str]
-    numero_identificativo: str
-    declaracion_complementaria: bool
-    declaracion_sustitutiva: bool
-    numero_identificativo_anterior: Optional[str]
-    numero_total_registros: int
-    suma_valoracion_1: Valoracion
-    suma_valoracion_2: Valoracion
-
-@dataclass
-class Detalle720:
-    tipo_registro: int
-    modelo: str
-    ejercicio: int
-    nif_declarante: str
-    nif_declarado: str
-    nif_representante: str
-    nombre_razon_declarado: str
-    clave_condicion: int
-    tipo_titularidad_texto: str
-    clave_tipo_bien: ClaveBien
-    subclave: int
-    tipo_derecho_real_inmueble: str
-    codigo_pais: str
-    clave_identificacion: int
-    identificacion_valores: str
-    clave_ident_cuenta: str
-    codigo_bic: str
-    codigo_cuenta: str
-    identificacion_entidad: str
-    nif_entidad_pais_residencia: str
-    domicilio_via_num: str
-    domicilio_complemento: str
-    domicilio_poblacion: str
-    domicilio_region: str
-    domicilio_cp: str
-    domicilio_pais: str
-    fecha_incorporacion: Optional[date]
-    origen: Origen
-    fecha_extincion: Optional[date]
-    valoracion_1: Valoracion
-    valoracion_2: Valoracion
-    clave_repr_valores: str
-    numero_valores_entera: int
-    numero_valores_decimal: int
-    clave_tipo_bien_inmueble: str
-    porcentaje_participacion_entera: int
-    porcentaje_participacion_decimal: int
-
-@dataclass
-class Declaration:
-    header: Header720
-    detalles: List[Detalle720] = field(default_factory=list)
-
-
-    def print_header(self, header: Header720):
-        print(f"Modelo {header.modelo} - Ejercicio {header.ejercicio}")
-        print(f"Declarante: {header.nif_declarante} - {header.nombre_razon}")
-        print(f"Número identificativo: {header.numero_identificativo}")
-        print(f"Registros declarados: {header.numero_total_registros}")
-        print(f"Suma valoración 1: {header.suma_valoracion_1.importe} | Suma valoración 2: {header.suma_valoracion_2.importe}")
-
-    def print_detalle(self, detalle: Detalle720, idx: int):
-        print(f"[{idx}] Bien {detalle.clave_tipo_bien.value} | País {detalle.codigo_pais} | Valor: {detalle.valoracion_1.importe}€")
-        print(f"  Declarado: {detalle.nif_declarado} - {detalle.nombre_razon_declarado}")
-        if detalle.fecha_incorporacion:
-            print(f"  Fecha incorporación: {detalle.fecha_incorporacion}")
-        if detalle.fecha_extincion:
-            print(f"  Fecha extinción: {detalle.fecha_extincion}")
-        print(f"  Porcentaje: {detalle.porcentaje_participacion_entera}.{detalle.porcentaje_participacion_decimal:02d}%")
-
-    def print_declaration(self):
-        self.print_header(self.header)
-        for i, d in enumerate(self.detalles, start=1):
-            self.print_detalle(d, i)
-    
-    def validate(self, strict: bool = False) -> List[str]:
-        """Validate declaration and return list of problems.
-        
-        Args:
-            strict: If True, apply additional business rules and field length checks
-            
-        Returns:
-            List of validation error messages (empty if valid)
-        """
-        problems = []
-        problems.extend(self._validate_structure())
-        if strict:
-            problems.extend(self._validate_business_rules())
-        return problems
-    
-    def validate_strict(self) -> None:
-        """Validate with strict rules, raises DeclarationValidationError on error."""
-        problems = self.validate(strict=True)
-        if problems:
-            raise DeclarationValidationError("; ".join(problems))
-    
-    def _validate_structure(self) -> List[str]:
-        """Basic structural validation."""
-        problems = []
-        h = self.header
-        
-        if h.tipo_registro != 1:
-            problems.append("Header tipo_registro must be 1")
-        if h.modelo != MODEL_CODE:
-            problems.append("Modelo must be 720")
-        if h.numero_total_registros != len(self.detalles):
-            problems.append("Número total de registros does not match detail count")
-        
-        # Validate valoración sums
-        sum1 = sum((d.valoracion_1.importe for d in self.detalles), Decimal("0"))
-        if (sum1 - h.suma_valoracion_1.importe).copy_abs() > Decimal("0.00"):
-            problems.append("SUMA VALORACIÓN 1 mismatch")
-            
-        return problems
-    
-    def _validate_business_rules(self) -> List[str]:
-        """Business rule validation for strict mode."""
-        problems = []
-        header = self.header
-        
-        # Header validation
-        if not header.numero_identificativo.isdigit() or len(header.numero_identificativo) != 13:
-            problems.append("Header numero_identificativo must be 13 digits")
-        
-        # Detail validation
-        for i, d in enumerate(self.detalles, start=1):
-            if d.clave_tipo_bien == ClaveBien.I and d.subclave != 0:
-                problems.append(f"Detail {i}: subclave must be 0 for clave 'I'")
-            if d.origen == Origen.C and d.fecha_extincion is None:
-                problems.append(f"Detail {i}: origen 'C' requires fecha_extincion")
-            if d.clave_tipo_bien == ClaveBien.C and d.clave_ident_cuenta not in ("I", "O", " "):
-                problems.append(f"Detail {i}: clave_ident_cuenta must be I/O")
-            if d.clave_tipo_bien == ClaveBien.B and d.clave_tipo_bien_inmueble not in ("U", "R", " "):
-                problems.append(f"Detail {i}: tipo inmueble must be U/R")
-        
-        return problems
-
-
-
-
-def to_dict(declaration: Declaration) -> dict:
-    return {
-        "header": declaration.header.__dict__,
-        "detalles": [d.__dict__ for d in declaration.detalles],
-    }
 
 
 # Field specifications preserving exact current order and positions
@@ -265,9 +95,6 @@ class Modelo720FormatError(Exception):
 class CSV720Error(Exception):
     pass
 
-class DeclarationValidationError(Exception):
-    """Raised when declaration validation fails."""
-    pass
 
 class Modelo720:
     """Parser and validator for Agencia Tributaria Modelo 720 fixed-width and CSV files."""
@@ -491,10 +318,99 @@ class Modelo720:
         
         dec = Declaration(header, detalles)
         try:
-            dec.validate_strict()  # Use new validation method
+            dec.validate()
         except DeclarationValidationError as e:
             raise CSV720Error(str(e))
         return dec
+    
+    def write_fixed_width(self, declaration: Declaration, fp: Union[str, TextIO]):
+        """Write declaration to fixed-width Modelo 720 format."""
+        need_close = False
+        if isinstance(fp, str):
+            f = open(fp, "w", encoding="latin-1")
+            need_close = True
+        else:
+            f = fp
+        
+        try:
+            # Write header line
+            header_line = self._format_header_line(declaration.header)
+            f.write(header_line + "\n")
+            
+            # Write detail lines
+            for detalle in declaration.detalles:
+                detail_line = self._format_detalle_line(detalle)
+                f.write(detail_line + "\n")
+                
+        finally:
+            if need_close:
+                f.close()
+    
+    def _format_header_line(self, header: Header720) -> str:
+        """Format header record to fixed-width string."""
+        line = ""
+        for field_spec in HEADER_FIELDS:
+            value = self._format_field_value(header, field_spec)
+            line += value
+        # Pad to exactly 500 characters as required by Spanish tax authority
+        return line.ljust(500)
+    
+    def _format_detalle_line(self, detalle: Detalle720) -> str:
+        """Format detail record to fixed-width string."""
+        line = ""
+        for field_spec in DETALLE_FIELDS:
+            value = self._format_field_value(detalle, field_spec)
+            line += value
+        # Pad to exactly 500 characters as required by Spanish tax authority  
+        return line.ljust(500)
+    
+    def _format_field_value(self, record: Union[Header720, Detalle720], field_spec: FieldSpec) -> str:
+        """Format a single field value according to its field specification."""
+        raw_value = getattr(record, field_spec.name)
+        field_width = field_spec.end - field_spec.start + 1
+        
+        if field_spec.transform == "str":
+            # String fields: left-aligned, padded with spaces
+            value = str(raw_value) if raw_value is not None else ""
+            return value.ljust(field_width)[:field_width]
+            
+        elif field_spec.transform == "int":
+            # Integer fields: right-aligned, zero-padded
+            value = str(raw_value) if raw_value is not None else "0"
+            return value.zfill(field_width)
+            
+        elif field_spec.transform == "date8":
+            # Date fields: AAAAMMDD format or 00000000 for None
+            if raw_value is None:
+                return "00000000"
+            else:
+                return raw_value.strftime("%Y%m%d")
+                
+        elif field_spec.transform == "bool_c":
+            # Boolean fields (C for True, space for False)
+            return "C" if raw_value else " "
+            
+        elif field_spec.transform == "bool_s":
+            # Boolean fields (S for True, space for False)
+            return "S" if raw_value else " "
+            
+        elif field_spec.transform == "enum":
+            # Enum fields: use the enum value
+            return raw_value.value if raw_value is not None else " "
+            
+        elif field_spec.transform == "valoracion":
+            # Valoracion fields: sign + amount in cents (17 digits total)
+            if raw_value is None:
+                return " " + "0".zfill(field_width - 1)
+            
+            sign = raw_value.signo
+            # Convert to cents (multiply by 100) and format as integer
+            cents = int(raw_value.importe * 100)
+            amount_str = str(cents).zfill(field_width - 1)
+            return sign + amount_str
+            
+        else:
+            raise ValueError(f"Unknown field transform: {field_spec.transform}")
     
     def _parse_csv_header(self, hvals: dict) -> Header720:
         """Parse header from CSV values."""
@@ -621,12 +537,3 @@ class Modelo720:
             porcentaje_participacion_decimal=_req_int("porcentaje_participacion_decimal"),
         )
     
-
-
-
-
-
-__all__ = [
-    "Modelo720FormatError", "Header720", "Detalle720", "Declaration", "Modelo720",
-    "to_dict", "CSV720Error", "DeclarationValidationError"
-]
