@@ -1,16 +1,24 @@
-from Modelo720.modelo720 import read_modelo720, validate, to_dict, print_declaration, write_csv, read_csv
+from Modelo720.modelo720 import Modelo720, to_dict
 
-dec = read_modelo720("Y1234567Z.720")
-problems = validate(dec)
+# Create parser instance
+parser = Modelo720()
+
+# Read fixed-width file 
+dec = parser.read_fixed_width("Y1234567Z.720")
+problems = dec.validate()
 if problems:
     print("Invalid file:\n - " + "\n - ".join(problems))
 else:
     print("Valid! Declarant:", dec.header.nif_declarante)
     data = to_dict(dec)  # JSON-friendly structure
 
+# # Write to CSV
+parser.write_csv(dec, "output.csv")
 
-# print_declaration(dec)
-write_csv(dec, "output.csv")
+# Read back from CSV
+dec2 = parser.read_csv("output.csv")
 
-dec = read_csv("output.csv")
-print_declaration(dec)
+print("declaraciones iguales?", dec == dec2)
+
+dec2.print_declaration()
+
