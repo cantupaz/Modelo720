@@ -38,7 +38,7 @@ def _to_decimal_from_cents(sign_char: str, cents_str: str) -> Decimal:
 
 def _to_date8(s: str) -> Optional[date]:
     s = s.strip()
-    if not s:
+    if not s or s=="00000000":
         return None
     if not re.fullmatch(r"[0-9]{8}", s):
         raise ValueError(f"Expected AAAAMMDD, got {s!r}")
@@ -269,3 +269,290 @@ def print_declaration(declaration: Declaration):
         print_detalle(d, i)
 
 __all__ = ["Modelo720FormatError", "Header720", "Detalle720", "Declaration", "read_modelo720", "validate", "to_dict", "print_header", "print_detalle", "print_declaration"]
+
+# ================= CSV I/O (two-section CSV) =================
+import csv
+from typing import TextIO
+
+HEADER_FIELDS_ORDER = [
+    "tipo_registro","modelo","ejercicio","nif_declarante","nombre_razon",
+    "tipo_soporte","telefono_contacto","persona_contacto","numero_identificativo",
+    "declaracion_complementaria","declaracion_sustitutiva","numero_identificativo_anterior",
+    "numero_total_registros","suma_valoracion_1","suma_valoracion_2"
+]
+
+DETALLE_FIELDS_ORDER = [
+    "tipo_registro","modelo","ejercicio","nif_declarante","nif_declarado","nif_representante",
+    "nombre_razon_declarado","clave_condicion","tipo_titularidad_texto","clave_tipo_bien","subclave",
+    "tipo_derecho_real_inmueble","codigo_pais","clave_identificacion","identificacion_valores",
+    "clave_ident_cuenta","codigo_bic","codigo_cuenta","identificacion_entidad","nif_entidad_pais_residencia",
+    "domicilio_via_num","domicilio_complemento","domicilio_poblacion","domicilio_region","domicilio_cp",
+    "domicilio_pais","fecha_incorporacion","origen","fecha_extincion","valoracion_1","valoracion_2",
+    "clave_repr_valores","numero_valores_entera","numero_valores_decimal","clave_tipo_bien_inmueble",
+    "porcentaje_participacion_entera","porcentaje_participacion_decimal"
+]
+
+_LEN = {
+    "nif_declarante": 9,
+    "nombre_razon": 40,
+    "tipo_soporte": 1,
+    "telefono_contacto": 9,
+    "persona_contacto": 40,
+    "numero_identificativo": 13,
+    "nif_declarado": 9,
+    "nif_representante": 9,
+    "nombre_razon_declarado": 40,
+    "tipo_titularidad_texto": 25,
+    "subclave": 1,
+    "tipo_derecho_real_inmueble": 25,
+    "codigo_pais": 2,
+    "identificacion_valores": 12,
+    "clave_ident_cuenta": 1,
+    "codigo_bic": 11,
+    "codigo_cuenta": 34,
+    "identificacion_entidad": 41,
+    "nif_entidad_pais_residencia": 20,
+    "domicilio_via_num": 52,
+    "domicilio_complemento": 40,
+    "domicilio_poblacion": 30,
+    "domicilio_region": 30,
+    "domicilio_cp": 10,
+    "domicilio_pais": 2,
+}
+
+class CSV720Error(Exception):
+    pass
+
+_DEF_HEADER_DEFAULTS = {"tipo_registro": 1, "modelo": MODEL_CODE}
+
+def _bool_to_str(b: bool) -> str:
+    return "1" if b else "0"
+
+def _str_to_bool(s: str) -> bool:
+    s = (s or "").strip().lower()
+    return s in {"1","true","t","yes","y","si","sí"}
+
+
+def write_csv(declaration: Declaration, fp: Union[str, TextIO]):
+    """Write a single CSV file with two sections: HEADER and DETALLES."""
+    need_close = False
+    if isinstance(fp, str):
+        f = open(fp, "w", newline="", encoding="utf-8")
+        need_close = True
+    else:
+        f = fp
+    try:
+        w = csv.writer(f)
+        # Header section
+        w.writerow(["__SECTION__","HEADER"])
+        w.writerow(["field","value"])  # informational header row
+        h = declaration.header
+        def _hv(name: str) -> str:
+            if name == "suma_valoracion_1":
+                return str(h.suma_valoracion_1.importe)
+            if name == "suma_valoracion_2":
+                return str(h.suma_valoracion_2.importe)
+            v = getattr(h, name)
+            if isinstance(v, bool):
+                return _bool_to_str(v)
+            return "" if v is None else str(v)
+        for name in HEADER_FIELDS_ORDER:
+            w.writerow([name, _hv(name)])
+        # Details section
+        w.writerow(["__SECTION__","DETALLES"])
+        w.writerow(DETALLE_FIELDS_ORDER)
+        for d in declaration.detalles:
+            def _dv(name: str):
+                v = getattr(d, name)
+                if isinstance(v, Enum):
+                    return v.value
+                if isinstance(v, date):
+                    return v.isoformat()
+                if isinstance(v, Valoracion):
+                    return str(v.importe)
+                return "" if v is None else str(v)
+            w.writerow([_dv(n) for n in DETALLE_FIELDS_ORDER])
+    finally:
+        if need_close:
+            f.close()
+
+
+def _parse_decimal_euros(s: str) -> Valoracion:
+    s = (s or "").strip()
+    if not s:
+        return Valoracion(" ", Decimal("0.00"))
+    d = Decimal(s)
+    signo = "N" if d < 0 else " "
+    return Valoracion(signo, abs(d).quantize(Decimal("0.01"), rounding=ROUND_DOWN))
+
+
+def read_csv(fp: Union[str, TextIO]) -> Declaration:
+    """Read a two-section CSV (HEADER then DETALLES) and return a Declaration.
+    Performs type/length/enum checks similar to the fixed-width spec.
+    """
+    need_close = False
+    if isinstance(fp, str):
+        f = open(fp, "r", newline="", encoding="utf-8")
+        need_close = True
+    else:
+        f = fp
+    try:
+        r = csv.reader(f)
+        rows = list(r)
+    finally:
+        if need_close:
+            f.close()
+
+    try:
+        header_start = next(i for i,row in enumerate(rows) if row[:2]==["__SECTION__","HEADER"]) + 1
+        detalles_start = next(i for i,row in enumerate(rows) if row[:2]==["__SECTION__","DETALLES"]) + 1
+    except StopIteration:
+        raise CSV720Error("Missing __SECTION__ markers for HEADER/DETALLES")
+
+    header_table = rows[header_start:detalles_start-1]
+    if not header_table:
+        raise CSV720Error("Empty header section")
+    if header_table and header_table[0][:2] == ["field","value"]:
+        header_table = header_table[1:]
+    hvals = {k: v for k,v,*_ in header_table}
+    for k,v in _DEF_HEADER_DEFAULTS.items():
+        hvals.setdefault(k, v)
+
+    try:
+        ejercicio = int(hvals.get("ejercicio"))
+    except Exception:
+        raise CSV720Error("Header 'ejercicio' must be integer")
+    numero_total_registros = int(hvals.get("numero_total_registros", 0) or 0)
+    suma_val1 = _parse_decimal_euros(hvals.get("suma_valoracion_1","0"))
+    suma_val2 = _parse_decimal_euros(hvals.get("suma_valoracion_2","0"))
+
+    header = Header720(
+        tipo_registro=int(hvals.get("tipo_registro",1)),
+        modelo=hvals.get("modelo", MODEL_CODE),
+        ejercicio=ejercicio,
+        nif_declarante=(hvals.get("nif_declarante") or ""),
+        nombre_razon=(hvals.get("nombre_razon") or ""),
+        tipo_soporte=(hvals.get("tipo_soporte") or " "),
+        telefono_contacto=hvals.get("telefono_contacto") or None,
+        persona_contacto=hvals.get("persona_contacto") or None,
+        numero_identificativo=(hvals.get("numero_identificativo") or ""),
+        declaracion_complementaria=_str_to_bool(hvals.get("declaracion_complementaria")),
+        declaracion_sustitutiva=_str_to_bool(hvals.get("declaracion_sustitutiva")),
+        numero_identificativo_anterior=hvals.get("numero_identificativo_anterior") or None,
+        numero_total_registros=numero_total_registros,
+        suma_valoracion_1=suma_val1,
+        suma_valoracion_2=suma_val2,
+    )
+
+    det_header = rows[detalles_start]
+    if det_header != DETALLE_FIELDS_ORDER:
+        raise CSV720Error("Detalles header row does not match expected columns")
+    det_rows = rows[detalles_start+1:]
+
+    detalles: List[Detalle720] = []
+    for ridx, row in enumerate(det_rows, start=1):
+        if not any((c or '').strip() for c in row):
+            continue
+        vals = dict(zip(DETALLE_FIELDS_ORDER, row))
+        def _req_int(name: str) -> int:
+            try:
+                return int((vals.get(name) or "0").strip() or 0)
+            except Exception:
+                raise CSV720Error(f"Detail row {ridx}: field '{name}' must be integer")
+        def _opt_date(name: str):
+            s = (vals.get(name) or "").strip()
+            if not s:
+                return None
+            try:
+                return date.fromisoformat(s)
+            except Exception:
+                raise CSV720Error(f"Detail row {ridx}: field '{name}' must be YYYY-MM-DD")
+        def _str_max(name: str) -> str:
+            s = (vals.get(name) or "").strip()
+            maxlen = _LEN.get(name)
+            if maxlen is not None and len(s) > maxlen:
+                raise CSV720Error(f"Detail row {ridx}: field '{name}' exceeds max length {maxlen}")
+            return s
+        def _enum(enum_cls, name: str):
+            s = (vals.get(name) or "").strip()
+            if not s:
+                raise CSV720Error(f"Detail row {ridx}: field '{name}' is required")
+            try:
+                return enum_cls(s)
+            except Exception:
+                raise CSV720Error(f"Detail row {ridx}: field '{name}' invalid value '{s}'")
+        def _valor(name: str) -> Valoracion:
+            return _parse_decimal_euros(vals.get(name))
+
+        d = Detalle720(
+            tipo_registro=_req_int("tipo_registro"),
+            modelo=_str_max("modelo"),
+            ejercicio=_req_int("ejercicio"),
+            nif_declarante=_str_max("nif_declarante"),
+            nif_declarado=_str_max("nif_declarado"),
+            nif_representante=_str_max("nif_representante"),
+            nombre_razon_declarado=_str_max("nombre_razon_declarado"),
+            clave_condicion=_req_int("clave_condicion"),
+            tipo_titularidad_texto=_str_max("tipo_titularidad_texto"),
+            clave_tipo_bien=_enum(ClaveBien, "clave_tipo_bien"),
+            subclave=_req_int("subclave"),
+            tipo_derecho_real_inmueble=_str_max("tipo_derecho_real_inmueble"),
+            codigo_pais=_str_max("codigo_pais"),
+            clave_identificacion=_req_int("clave_identificacion"),
+            identificacion_valores=_str_max("identificacion_valores"),
+            clave_ident_cuenta=_str_max("clave_ident_cuenta"),
+            codigo_bic=_str_max("codigo_bic"),
+            codigo_cuenta=_str_max("codigo_cuenta"),
+            identificacion_entidad=_str_max("identificacion_entidad"),
+            nif_entidad_pais_residencia=_str_max("nif_entidad_pais_residencia"),
+            domicilio_via_num=_str_max("domicilio_via_num"),
+            domicilio_complemento=_str_max("domicilio_complemento"),
+            domicilio_poblacion=_str_max("domicilio_poblacion"),
+            domicilio_region=_str_max("domicilio_region"),
+            domicilio_cp=_str_max("domicilio_cp"),
+            domicilio_pais=_str_max("domicilio_pais"),
+            fecha_incorporacion=_opt_date("fecha_incorporacion"),
+            origen=_enum(Origen, "origen"),
+            fecha_extincion=_opt_date("fecha_extincion"),
+            valoracion_1=_valor("valoracion_1"),
+            valoracion_2=_valor("valoracion_2"),
+            clave_repr_valores=_str_max("clave_repr_valores"),
+            numero_valores_entera=_req_int("numero_valores_entera"),
+            numero_valores_decimal=_req_int("numero_valores_decimal"),
+            clave_tipo_bien_inmueble=_str_max("clave_tipo_bien_inmueble"),
+            porcentaje_participacion_entera=_req_int("porcentaje_participacion_entera"),
+            porcentaje_participacion_decimal=_req_int("porcentaje_participacion_decimal"),
+        )
+        detalles.append(d)
+
+    dec = Declaration(header, detalles)
+
+    # Extra logical checks
+    strict = []
+    if header.modelo != MODEL_CODE:
+        strict.append("Header modelo must be '720'")
+    if not header.numero_identificativo.isdigit() or len(header.numero_identificativo) != 13:
+        strict.append("Header numero_identificativo must be 13 digits")
+    if len(header.nombre_razon) > _LEN["nombre_razon"]:
+        strict.append("Header nombre_razon too long")
+    for i,d in enumerate(detalles, start=1):
+        if d.clave_tipo_bien == ClaveBien.I and d.subclave != 0:
+            strict.append(f"Detail {i}: subclave must be 0 for clave 'I'")
+        if d.origen == Origen.C and d.fecha_extincion is None:
+            strict.append(f"Detail {i}: origen 'C' requires fecha_extincion")
+        if d.clave_tipo_bien == ClaveBien.C and d.clave_ident_cuenta not in ("I","O"," "):
+            strict.append(f"Detail {i}: clave_ident_cuenta must be I/O")
+        if d.clave_tipo_bien == ClaveBien.B and d.clave_tipo_bien_inmueble not in ("U","R"," "):
+            strict.append(f"Detail {i}: tipo inmueble must be U/R")
+    if strict:
+        raise CSV720Error("; ".join(strict))
+
+    return dec
+
+# Override exported names to include CSV helpers
+__all__ = [
+    "Modelo720FormatError","Header720","Detalle720","Declaration",
+    "read_modelo720","validate","to_dict","print_header","print_detalle",
+    "print_declaration","write_csv","read_csv","CSV720Error"
+]
+
