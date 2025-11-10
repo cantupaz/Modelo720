@@ -8,8 +8,8 @@ from datetime import date
 from decimal import Decimal
 from io import StringIO
 
-from Modelo720 import Modelo720, Valoracion, DeclarationValidationError, Modelo720FormatError, CSV720Error
-from Modelo720.modelo720 import FieldSpec, HEADER_FIELDS, DETALLE_FIELDS
+from Modelo720 import Parser, Valoracion, DeclarationValidationError, ParserFormatError, CSV720Error
+from Modelo720.parser import FieldSpec, HEADER_FIELDS, DETALLE_FIELDS
 from Modelo720.declaracion import ClaveBien, Origen
 
 class TestFieldSpec(unittest.TestCase):
@@ -53,10 +53,10 @@ class TestFieldSpec(unittest.TestCase):
                 positions.update(field_positions)
 
 class TestParsingHelpers(unittest.TestCase):
-    """Test parsing helper methods in Modelo720 class."""
+    """Test parsing helper methods in Parser class."""
     
     def setUp(self):
-        self.parser = Modelo720()
+        self.parser = Parser()
     
     def test_to_date8_valid(self):
         """Test date parsing with valid input."""
@@ -104,7 +104,7 @@ class TestFieldParsing(unittest.TestCase):
     """Test field parsing using FieldSpec."""
     
     def setUp(self):
-        self.parser = Modelo720()
+        self.parser = Parser()
     
     def test_parse_field_str(self):
         """Test string field parsing."""
@@ -136,7 +136,7 @@ class TestDeclarationValidation(unittest.TestCase):
     
     def setUp(self):
         from datetime import date
-        from Modelo720.modelo720 import Header720, Detalle720, Declaration, Valoracion
+        from Modelo720.declaracion import Header720, Detalle720, Declaration, Valoracion
         
         # Create a minimal valid declaration for testing
         self.header = Header720(
@@ -264,7 +264,7 @@ class TestCSVRoundTrip(unittest.TestCase):
     """Test CSV reading and writing."""
     
     def setUp(self):
-        self.parser = Modelo720()
+        self.parser = Parser()
         
         # Create minimal test data
         self.csv_content = '''__SECTION__,HEADER

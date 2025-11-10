@@ -1,5 +1,5 @@
 """
-Parser for Agencia Tributaria Modelo 720 fixed-width and proprietary CSV files.
+Parser and Writer for Agencia Tributaria Modelo 720 fixed-width and proprietary CSV files.
 
 The fixed-width format is the official format used by the Agencia Tributaria for Modelo 720 declarations.
 
@@ -89,14 +89,14 @@ DETALLE_FIELDS = [
     FieldSpec("porcentaje_participacion_decimal", 479, 480, "int"),
 ]
 
-class Modelo720FormatError(Exception):
+class ParserFormatError(Exception):
     pass
 
 class CSV720Error(Exception):
     pass
 
 
-class Modelo720:
+class Parser:
     """Parser and validator for Agencia Tributaria Modelo 720 fixed-width and CSV files."""
     
     def __init__(self, encoding: str = "latin-1"):
@@ -177,7 +177,7 @@ class Modelo720:
             try:
                 result[field_spec.name] = self._parse_field(line, field_spec)
             except Exception as e:
-                raise Modelo720FormatError(f"Error parsing field '{field_spec.name}': {e}")
+                raise ParserFormatError(f"Error parsing field '{field_spec.name}': {e}")
         return result
     
     def _parse_header(self, line: str) -> Header720:
@@ -536,4 +536,3 @@ class Modelo720:
             porcentaje_participacion_entera=_req_int("porcentaje_participacion_entera"),
             porcentaje_participacion_decimal=_req_int("porcentaje_participacion_decimal"),
         )
-    
