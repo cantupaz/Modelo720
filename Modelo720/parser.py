@@ -14,9 +14,10 @@ from datetime import date
 from decimal import Decimal, ROUND_DOWN
 from enum import Enum
 from typing import List, Optional, Union
+import csv
 import re
 
-from .declaracion import Declaration, MODEL_CODE, ClaveBien, Origen, Valoracion, Header720, Detalle720, DeclarationValidationError
+from .declaracion import Declaration, ClaveBien, Origen, Valoracion, Header720, Detalle720, DeclarationValidationError
 
 @dataclass
 class FieldSpec:
@@ -128,6 +129,9 @@ class Parser:
     def _parse_field(self, line: str, field_spec: FieldSpec) -> any:
         """Parse a single field from a line based on field specification."""
         raw_value = line[field_spec.start - 1 : field_spec.end]
+        return self._parse_raw_value(raw_value, field_spec)
+
+    def _parse_raw_value(self, raw_value: str, field_spec: FieldSpec) -> any:        
         
         if field_spec.transform == "str":
             return raw_value.rstrip() if raw_value else ""
@@ -203,7 +207,7 @@ class Parser:
         for field_spec in field_specs:
             value = self._format_field_value(record, field_spec)
             line += value
-        # Pad to exactly 500 characters as required by Spanish tax authority
+        # Pad to exactly 500 characters
         return line.ljust(500)
     
     def _format_field_value(self, record: Union[Header720, Detalle720], field_spec: FieldSpec) -> str:
@@ -258,7 +262,6 @@ class Parser:
 
     def write_csv(self, declaration: Declaration, file_path: str):
         """Write declaration to CSV format."""
-        import csv
         
         with open(file_path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
@@ -267,7 +270,7 @@ class Parser:
             w.writerow(["field", "value"])
             h = declaration.header
             for field_spec in HEADER_FIELDS:
-                value = self._get_header_field_value(h, field_spec)
+                value = self._get_field_value_for_csv(h, field_spec)
                 w.writerow([field_spec.name, value])
             
             # Details section  
@@ -276,24 +279,16 @@ class Parser:
             for d in declaration.detalles:
                 row = []
                 for field_spec in DETALLE_FIELDS:
-                    value = self._get_detalle_field_value(d, field_spec)
+                    value = self._get_field_value_for_csv(d, field_spec)
                     row.append(value)
                 w.writerow(row)
     
-    def _get_header_field_value(self, header: Header720, field_spec: FieldSpec) -> str:
-        """Get string representation of header field for CSV."""
-        v = getattr(header, field_spec.name)
+    def _get_field_value_for_csv(self, record: Union[Header720, Detalle720], field_spec: FieldSpec) -> str:
+        """Get string representation of field for CSV."""
+        v = getattr(record, field_spec.name)
         if isinstance(v, bool):
             return "1" if v else "0"
-        elif isinstance(v, Valoracion):
-            return str(v.importe)
-        else:
-            return "" if v is None else str(v)
-    
-    def _get_detalle_field_value(self, detalle: Detalle720, field_spec: FieldSpec) -> str:
-        """Get string representation of detalle field for CSV."""
-        v = getattr(detalle, field_spec.name)
-        if isinstance(v, Enum):
+        elif isinstance(v, Enum):
             return v.value
         elif isinstance(v, date):
             return v.isoformat()
@@ -305,7 +300,6 @@ class Parser:
     
     def read_csv(self, file_path: str) -> Declaration:
         """Read declaration from CSV format."""
-        import csv
         
         with open(file_path, "r", newline="", encoding="utf-8") as f:
             r = csv.reader(f)
@@ -325,11 +319,11 @@ class Parser:
             header_table = header_table[1:]
         
         hvals = {k: v for k, v, *_ in header_table}
-        # Set defaults
-        hvals.setdefault("tipo_registro", "1")
-        hvals.setdefault("modelo", MODEL_CODE)
         
-        header = self._parse_csv_header(hvals)
+        
+        # Parse header using field specifications
+        header_fields = self._parse_csv_line(hvals, HEADER_FIELDS)
+        header = Header720(**header_fields)
         
         # Parse details section
         det_header = rows[detalles_start]
@@ -343,8 +337,15 @@ class Parser:
             if not any((c or '').strip() for c in row):
                 continue
             vals = dict(zip(expected_columns, row))
-            detalle = self._parse_csv_detalle(vals, ridx)
-            detalles.append(detalle)
+            try:
+                # Parse detail using field specifications  
+                detalle_fields = self._parse_csv_line(vals, DETALLE_FIELDS)
+                detalle = Detalle720(**detalle_fields)
+                detalles.append(detalle)
+            except CSV720Error:
+                raise
+            except Exception as e:
+                raise CSV720Error(f"Error parsing detail row {ridx}: {e}")
         
         dec = Declaration(header, detalles)
         try:
@@ -353,128 +354,47 @@ class Parser:
             raise CSV720Error(str(e))
         return dec
     
+    def _parse_valoracion_from_string(self, s: str) -> Valoracion:
+        """Parse a Valoracion from a string value."""
+        s = (s or "").strip()
+        if not s:
+            return Valoracion(" ", Decimal("0.00"))
+        d = Decimal(s)
+        signo = "N" if d < 0 else " "
+        return Valoracion(signo, abs(d).quantize(Decimal("0.01"), rounding=ROUND_DOWN))
     
-    def _parse_csv_header(self, hvals: dict) -> Header720:
-        """Parse header from CSV values."""
-        def _parse_decimal_euros(s: str) -> Valoracion:
-            s = (s or "").strip()
-            if not s:
-                return Valoracion(" ", Decimal("0.00"))
-            d = Decimal(s)
-            signo = "N" if d < 0 else " "
-            return Valoracion(signo, abs(d).quantize(Decimal("0.01"), rounding=ROUND_DOWN))
-        
-        def _str_to_bool(s: str) -> bool:
-            s = (s or "").strip().lower()
-            return s in {"1", "true", "t", "yes", "y", "si", "sí"}
-        
-        try:
-            ejercicio = int(hvals.get("ejercicio", "0"))
-        except Exception:
-            raise CSV720Error("Header 'ejercicio' must be integer")
-        
-        numero_total_registros = int(hvals.get("numero_total_registros", "0") or "0")
-        suma_val1 = _parse_decimal_euros(hvals.get("suma_valoracion_1", "0"))
-        suma_val2 = _parse_decimal_euros(hvals.get("suma_valoracion_2", "0"))
-        
-        return Header720(
-            tipo_registro=int(hvals.get("tipo_registro", "1")),
-            modelo=hvals.get("modelo", MODEL_CODE),
-            ejercicio=ejercicio,
-            nif_declarante=(hvals.get("nif_declarante") or ""),
-            nombre_razon=(hvals.get("nombre_razon") or ""),
-            tipo_soporte=(hvals.get("tipo_soporte") or " "),
-            telefono_contacto=hvals.get("telefono_contacto") or None,
-            persona_contacto=hvals.get("persona_contacto") or None,
-            numero_identificativo=(hvals.get("numero_identificativo") or ""),
-            declaracion_complementaria=_str_to_bool(hvals.get("declaracion_complementaria", "")),
-            declaracion_sustitutiva=_str_to_bool(hvals.get("declaracion_sustitutiva", "")),
-            numero_identificativo_anterior=hvals.get("numero_identificativo_anterior") or None,
-            numero_total_registros=numero_total_registros,
-            suma_valoracion_1=suma_val1,
-            suma_valoracion_2=suma_val2,
-        )
-    
-    def _parse_csv_detalle(self, vals: dict, ridx: int) -> Detalle720:
-        """Parse detalle from CSV values."""
-        def _req_int(name: str) -> int:
-            try:
-                return int((vals.get(name) or "0").strip() or "0")
-            except Exception:
-                raise CSV720Error(f"Detail row {ridx}: field '{name}' must be integer")
-        
-        def _opt_date(name: str):
-            s = (vals.get(name) or "").strip()
-            if not s:
+    def _parse_csv_field(self, csv_value: str, field_spec: FieldSpec) -> any:
+        """Parse a CSV field value based on field specification."""
+        csv_value = (csv_value or "").strip()
+           
+        if field_spec.transform == "date8":
+            if not csv_value:
                 return None
             try:
-                return date.fromisoformat(s)
-            except Exception:
-                raise CSV720Error(f"Detail row {ridx}: field '{name}' must be YYYY-MM-DD")
+                return date.fromisoformat(csv_value)
+            except ValueError:
+                raise ValueError(f"Expected YYYY-MM-DD date for field '{field_spec.name}', got {csv_value!r}")
+                
+        elif field_spec.transform == "bool_c":
+            return csv_value.lower() in {"1", "true", "t", "yes", "y", "si", "sí"}
+            
+        elif field_spec.transform == "bool_s":
+            return csv_value.lower() in {"1", "true", "t", "yes", "y", "si", "sí"}
+            
+        elif field_spec.transform == "valoracion":
+            return self._parse_valoracion_from_string(csv_value)
+            
+        else:
+            # all other types
+            return self._parse_raw_value(csv_value, field_spec)
         
-        def _str_field(name: str) -> str:
-            s = (vals.get(name) or "").strip()
-            # Get max length from field spec
-            field_spec = next((f for f in DETALLE_FIELDS if f.name == name), None)
-            if field_spec:
-                maxlen = field_spec.end - field_spec.start + 1
-                if len(s) > maxlen:
-                    raise CSV720Error(f"Detail row {ridx}: field '{name}' exceeds max length {maxlen}")
-            return s
-        
-        def _enum_field(enum_cls, name: str):
-            s = (vals.get(name) or "").strip()
-            if not s:
-                raise CSV720Error(f"Detail row {ridx}: field '{name}' is required")
+    def _parse_csv_line(self, csv_values: dict, field_specs: List[FieldSpec]) -> dict:
+        """Parse CSV values using field specifications."""
+        result = {}
+        for field_spec in field_specs:
             try:
-                return enum_cls(s)
-            except Exception:
-                raise CSV720Error(f"Detail row {ridx}: field '{name}' invalid value '{s}'")
-        
-        def _valor_field(name: str) -> Valoracion:
-            s = (vals.get(name) or "").strip()
-            if not s:
-                return Valoracion(" ", Decimal("0.00"))
-            d = Decimal(s)
-            signo = "N" if d < 0 else " "
-            return Valoracion(signo, abs(d).quantize(Decimal("0.01"), rounding=ROUND_DOWN))
-        
-        return Detalle720(
-            tipo_registro=_req_int("tipo_registro"),
-            modelo=_str_field("modelo"),
-            ejercicio=_req_int("ejercicio"),
-            nif_declarante=_str_field("nif_declarante"),
-            nif_declarado=_str_field("nif_declarado"),
-            nif_representante=_str_field("nif_representante"),
-            nombre_razon_declarado=_str_field("nombre_razon_declarado"),
-            clave_condicion=_req_int("clave_condicion"),
-            tipo_titularidad_texto=_str_field("tipo_titularidad_texto"),
-            clave_tipo_bien=_enum_field(ClaveBien, "clave_tipo_bien"),
-            subclave=_req_int("subclave"),
-            tipo_derecho_real_inmueble=_str_field("tipo_derecho_real_inmueble"),
-            codigo_pais=_str_field("codigo_pais"),
-            clave_identificacion=_req_int("clave_identificacion"),
-            identificacion_valores=_str_field("identificacion_valores"),
-            clave_ident_cuenta=_str_field("clave_ident_cuenta"),
-            codigo_bic=_str_field("codigo_bic"),
-            codigo_cuenta=_str_field("codigo_cuenta"),
-            identificacion_entidad=_str_field("identificacion_entidad"),
-            nif_entidad_pais_residencia=_str_field("nif_entidad_pais_residencia"),
-            domicilio_via_num=_str_field("domicilio_via_num"),
-            domicilio_complemento=_str_field("domicilio_complemento"),
-            domicilio_poblacion=_str_field("domicilio_poblacion"),
-            domicilio_region=_str_field("domicilio_region"),
-            domicilio_cp=_str_field("domicilio_cp"),
-            domicilio_pais=_str_field("domicilio_pais"),
-            fecha_incorporacion=_opt_date("fecha_incorporacion"),
-            origen=_enum_field(Origen, "origen"),
-            fecha_extincion=_opt_date("fecha_extincion"),
-            valoracion_1=_valor_field("valoracion_1"),
-            valoracion_2=_valor_field("valoracion_2"),
-            clave_repr_valores=_str_field("clave_repr_valores"),
-            numero_valores_entera=_req_int("numero_valores_entera"),
-            numero_valores_decimal=_req_int("numero_valores_decimal"),
-            clave_tipo_bien_inmueble=_str_field("clave_tipo_bien_inmueble"),
-            porcentaje_participacion_entera=_req_int("porcentaje_participacion_entera"),
-            porcentaje_participacion_decimal=_req_int("porcentaje_participacion_decimal"),
-        )
+                csv_value = csv_values.get(field_spec.name, "")
+                result[field_spec.name] = self._parse_csv_field(csv_value, field_spec)
+            except Exception as e:
+                raise CSV720Error(f"Error parsing CSV field '{field_spec.name}': {e}")
+        return result
