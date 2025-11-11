@@ -27,23 +27,25 @@ from Modelo720 import Parser, Declaration
 # Create a parser instance
 parser = Parser()
 
-# Read a fixed-width Modelo 720 file
+# Read a fixed-width Modelo 720 file (your last year's file, for example)
 declaration = parser.read_fixed_width("my_declaration.720")
 
 # Validate the declaration
 try:
     declaration.validate()
-    print("✓ Declaration is valid")
+    print("Declaration is valid")
 except DeclarationValidationError as e:
-    print(f"✗ Validation failed: {e}")
+    print(f"Validation failed: {e}")
 
 # Convert to CSV for easier viewing/editing
 parser.write_csv(declaration, "declaration.csv")
 
+# Edit declaracion.csv with new data
+
 # Read back from CSV
 declaration2 = parser.read_csv("declaration.csv")
 
-# Write back to official format
+# Write back to official format to file with Hacienda
 parser.write_fixed_width(declaration2, "output.720")
 ```
 
@@ -54,7 +56,7 @@ parser.write_fixed_width(declaration2, "output.720")
 The main `Parser` class provides methods for reading and writing declarations:
 
 ```python
-parser = Parser(encoding="latin-1")  # Default encoding for .720 files
+parser = Parser()  
 ```
 
 #### Methods
@@ -87,18 +89,18 @@ except DeclarationValidationError as e:
 
 Validation includes:
 - Structural validation (required fields, formats)
-- Business rule validation (asset type constraints)
+- Validation of asset type constraints
 - Financial validation (sum totals must match)
 
 ## File Formats
 
 ### Fixed-Width Format (.720)
 
-The official format used by the Spanish tax authority:
+The official format used by the Agencia Tributaria:
 - 500 character fixed-width lines
-- Latin-1 encoding
+- ISO-8859-1 encoding
 - Specific field positions and formats
-- Header line followed by detail lines
+- Header line (registro 1) followed by detail lines (registro tipo 2)
 
 ### CSV Format
 
@@ -108,48 +110,6 @@ A proprietary CSV format for easier data manipulation:
 - Human-readable field names
 - ISO date formats
 
-## Examples
-
-### Basic Usage
-
-```python
-from Modelo720 import Parser
-
-parser = Parser()
-
-# Read and validate
-declaration = parser.read_fixed_width("input.720")
-declaration.validate()
-
-# Print summary
-print(f"Declarant: {declaration.header.nif_declarante}")
-print(f"Assets: {len(declaration.detalles)}")
-print(f"Total value: {declaration.header.suma_valoracion_1.importe}€")
-```
-
-### Converting Formats
-
-```python
-# Convert .720 to CSV
-declaration = parser.read_fixed_width("input.720")
-parser.write_csv(declaration, "output.csv")
-
-# Convert CSV back to .720
-declaration = parser.read_csv("input.csv")
-parser.write_fixed_width(declaration, "output.720")
-```
-
-### Asset Information
-
-```python
-# Print details about each declared asset
-for i, asset in enumerate(declaration.detalles, 1):
-    print(f"Asset {i}:")
-    print(f"  Type: {asset.clave_tipo_bien.value}")
-    print(f"  Country: {asset.codigo_pais}")
-    print(f"  Value: {asset.valoracion_1.importe}€")
-    print(f"  Owner: {asset.nombre_razon_declarado}")
-```
 
 ## Error Handling
 
@@ -205,7 +165,9 @@ The library supports all Modelo 720 asset types:
 
 ## Contributing
 
-Contributions are welcome! Please ensure:
+Contributions are welcome! Please contact me before implementing anything, so we can discuss.
+
+For contributions, ensure:
 
 1. All tests pass: `python -m unittest test_modelo720.py`
 2. Code follows existing style conventions
@@ -240,3 +202,4 @@ SOFTWARE.
 
 - [Agencia Tributaria](https://www.agenciatributaria.es/) - Spanish tax authority
 - [Modelo 720 Information](https://www.agenciatributaria.es/AEAT.internet/en_gb/Inicio/Ayuda/Manuales__Folletos_y_Videos/Manuales_practicos/Modelo_720/Modelo_720.shtml) - Official documentation
+- [Spec for Modelo 720 files](https://sede.agenciatributaria.gob.es/static_files/Sede/Disenyo_registro/DR_Resto_Mod/archivos/modelo_720.pdf) - Spec is also included in this repo since it doesn't seem to be versioned.

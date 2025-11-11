@@ -1,0 +1,28 @@
+__SECTION__,HEADER
+field,value
+tipo_registro,1
+modelo,720
+ejercicio,2024
+nif_declarante,12345678A
+nombre_razon,"APELLIDO NUÑEZ, MARIA CARMEN"
+tipo_soporte,T
+telefono_contacto,667000111
+persona_contacto,"APELLIDO NUÑEZ, MARIA CARMEN"
+numero_identificativo,7200000000000
+declaracion_complementaria,0
+declaracion_sustitutiva,0
+numero_identificativo_anterior,0
+numero_total_registros,9
+suma_valoracion_1,580120.91
+suma_valoracion_2,44035.36
+__SECTION__,DETALLES
+tipo_registro,modelo,ejercicio,nif_declarante,nif_declarado,nif_representante,nombre_razon_declarado,clave_condicion,tipo_titularidad_texto,clave_tipo_bien,subclave,tipo_derecho_real_inmueble,codigo_pais,clave_identificacion,identificacion_valores,clave_ident_cuenta,codigo_bic,codigo_cuenta,identificacion_entidad,nif_entidad_pais_residencia,domicilio_via_num,domicilio_complemento,domicilio_poblacion,domicilio_region,domicilio_cp,domicilio_pais,fecha_incorporacion,origen,fecha_extincion,valoracion_1,valoracion_2,clave_repr_valores,numero_valores_entera,numero_valores_decimal,clave_tipo_bien_inmueble,porcentaje_participacion_entera,porcentaje_participacion_decimal
+2,720,2024,12345678A,12345678A,,"APELLIDO NUÑEZ, MARIA CARMEN",1,,C,1,,US,0,,O,,40012345678,CITIBANK CHECKING,,,,,,,US,2000-06-01,M,,12345.78,15678.91,,0,0,,50,0
+2,720,2024,12345678A,12345678A,,"APELLIDO NUÑEZ, MARIA CARMEN",1,,V,1,,IE,1,IE00BSKRJZ44,,,,ISHARES USD TRES 20PLUS YR,,,,,,,IE,,A,,45123.26,0.00,A,4000,0,,50,0
+2,720,2024,12345678A,12345678A,,"APELLIDO NUÑEZ, MARIA CARMEN",1,,V,1,,US,1,US64110L1061,,,,NETFLIX INC COM NFLX,,,,,,,US,,M,,110321.23,0.00,A,100,0,,50,0
+2,720,2024,12345678A,12345678A,,"APELLIDO NUÑEZ, MARIA CARMEN",1,,V,1,,US,1,US78462F1030,,,,SPDR S&P 500 ETF TRUST SPY,,,,,,,US,,M,,68111.22,0.00,A,100,0,,50,0
+2,720,2024,12345678A,12345678A,,"APELLIDO NUÑEZ, MARIA CARMEN",1,,V,1,,US,1,US4642886539,,,,ISHARES 10-20 YEAR TREASURY,,,,,,,US,,A,,50222.45,0.00,A,500,0,,50,0
+2,720,2024,12345678A,12345678A,,"APELLIDO NUÑEZ, MARIA CARMEN",1,,V,1,,US,1,US60770K1079,,,,MODERNA INC,,,,,,,US,,A,,20011.55,0.00,A,500,0,,50,0
+2,720,2024,12345678A,12345678A,,"APELLIDO NUÑEZ, MARIA CARMEN",1,,C,5,,IE,0,,O,,U12345678,INTERACTIVE BROKERS SALDO EUR,,,,,,,IE,2024-06-06,A,,60302.71,8702.89,,0,0,,50,0
+2,720,2024,12345678A,12345678A,,"APELLIDO NUÑEZ, MARIA CARMEN",1,,C,5,,IE,0,,O,,U12345678,INTERACTIVE BROKERS SALDO USD,,,,,,,IE,2024-06-06,A,,27016.52,19653.56,,0,0,,50,0
+2,720,2024,12345678A,12345678A,,"APELLIDO NUÑEZ, MARIA CARMEN",1,,V,1,,US,1,US0231351067,,,,AMAZON INC,,,,,,,US,,M,,186666.19,0.00,A,650,0,,50,0
