@@ -8,7 +8,7 @@ from datetime import date
 from decimal import Decimal
 from io import StringIO
 
-from Modelo720 import Parser, Valoracion, DeclarationValidationError, ParserFormatError, CSV720Error
+from Modelo720 import Parser, Valoracion, DeclarationValidationError
 from Modelo720.parser import FieldSpec, HEADER_FIELDS, DETALLE_FIELDS
 from Modelo720.declaracion import ClaveBien, Origen
 
@@ -23,7 +23,7 @@ class TestFieldSpec(unittest.TestCase):
             "declaracion_complementaria", "declaracion_sustitutiva", "numero_identificativo_anterior",
             "numero_total_registros", "suma_valoracion_1", "suma_valoracion_2"
         ]
-        actual_order = [f.name for f in HEADER_FIELDS if f.csv_include]
+        actual_order = [f.name for f in HEADER_FIELDS]
         self.assertEqual(actual_order, expected_order)
     
     def test_detalle_field_order_preserved(self):
@@ -38,7 +38,7 @@ class TestFieldSpec(unittest.TestCase):
             "clave_repr_valores", "numero_valores_entera", "numero_valores_decimal", "clave_tipo_bien_inmueble",
             "porcentaje_participacion_entera", "porcentaje_participacion_decimal"
         ]
-        actual_order = [f.name for f in DETALLE_FIELDS if f.csv_include]
+        actual_order = [f.name for f in DETALLE_FIELDS]
         self.assertEqual(actual_order, expected_order)
     
     def test_field_positions_no_overlaps(self):
@@ -112,8 +112,8 @@ class TestFieldParsing(unittest.TestCase):
         result = self.parser._parse_field("Hello     ", field_spec)
         self.assertEqual(result, "Hello")
         
-        # Test empty string handling (non-required field)
-        field_spec_optional = FieldSpec("test_field", 1, 10, "str", required=False)
+        # Test empty string handling 
+        field_spec_optional = FieldSpec("test_field", 1, 10, "str")
         result = self.parser._parse_field("          ", field_spec_optional)
         self.assertEqual(result, "")
     
@@ -288,8 +288,17 @@ tipo_registro,modelo,ejercicio,nif_declarante,nif_declarado,nif_representante,no
     
     def test_csv_read_basic(self):
         """Test basic CSV reading."""
-        csv_file = StringIO(self.csv_content)
-        declaration = self.parser.read_csv(csv_file)
+        # Write test content to temporary file
+        with open('temp_test.csv', 'w', encoding='utf-8') as f:
+            f.write(self.csv_content)
+        
+        try:
+            declaration = self.parser.read_csv('temp_test.csv')
+        finally:
+            # Clean up temp file
+            import os
+            if os.path.exists('temp_test.csv'):
+                os.remove('temp_test.csv')
         
         self.assertEqual(declaration.header.nif_declarante, "Y9127527Z")
         self.assertEqual(declaration.header.ejercicio, 2024)

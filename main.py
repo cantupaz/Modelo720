@@ -1,6 +1,6 @@
 from Modelo720 import Parser, DeclarationValidationError
 
-# Create parser instance
+
 parser = Parser()
 
 # Read fixed-width file 
@@ -24,7 +24,7 @@ dec2 = parser.read_fixed_width("output_rewritten.720")
 if dec == dec2:
     print("Declarations are equal after round-trip conversion.")
 else:
-    print("Declarations differ after round-trip conversion.")
+    raise RuntimeError("Declarations differ after round-trip conversion.")
 
-# dec2.print_declaration()
+dec2.print_declaration()
 

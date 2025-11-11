@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_DOWN
 from enum import Enum
-from typing import Iterable, List, Optional, Union, TextIO
+from typing import List, Optional, Union
 import re
 
 from .declaracion import Declaration, MODEL_CODE, ClaveBien, Origen, Valoracion, Header720, Detalle720, DeclarationValidationError
@@ -26,8 +26,6 @@ class FieldSpec:
     end: int            # 1-based position in fixed-width line
     transform: str      # Transform type: "int", "str", "date8", "decimal_cents", "bool_c", "bool_s", "enum"
     enum_class: Optional[type] = None  # For enum transforms
-    required: bool = True
-    csv_include: bool = True
 
 
 # Field specifications preserving exact current order and positions
@@ -38,12 +36,12 @@ HEADER_FIELDS = [
     FieldSpec("nif_declarante", 9, 17, "str"),
     FieldSpec("nombre_razon", 18, 57, "str"),
     FieldSpec("tipo_soporte", 58, 58, "str"),
-    FieldSpec("telefono_contacto", 59, 67, "str", required=False),
-    FieldSpec("persona_contacto", 68, 107, "str", required=False),
+    FieldSpec("telefono_contacto", 59, 67, "str"),
+    FieldSpec("persona_contacto", 68, 107, "str"),
     FieldSpec("numero_identificativo", 108, 120, "str"),
     FieldSpec("declaracion_complementaria", 121, 121, "bool_c"),
     FieldSpec("declaracion_sustitutiva", 122, 122, "bool_s"),
-    FieldSpec("numero_identificativo_anterior", 123, 135, "str", required=False),
+    FieldSpec("numero_identificativo_anterior", 123, 135, "str"),
     FieldSpec("numero_total_registros", 136, 144, "int"),
     FieldSpec("suma_valoracion_1", 145, 162, "valoracion"),
     FieldSpec("suma_valoracion_2", 163, 180, "valoracion"),
@@ -76,9 +74,9 @@ DETALLE_FIELDS = [
     FieldSpec("domicilio_region", 373, 402, "str"),
     FieldSpec("domicilio_cp", 403, 412, "str"),
     FieldSpec("domicilio_pais", 413, 414, "str"),
-    FieldSpec("fecha_incorporacion", 415, 422, "date8", required=False),
+    FieldSpec("fecha_incorporacion", 415, 422, "date8"),
     FieldSpec("origen", 423, 423, "enum", enum_class=Origen),
-    FieldSpec("fecha_extincion", 424, 431, "date8", required=False),
+    FieldSpec("fecha_extincion", 424, 431, "date8"),
     FieldSpec("valoracion_1", 432, 446, "valoracion"),
     FieldSpec("valoracion_2", 447, 461, "valoracion"),
     FieldSpec("clave_repr_valores", 462, 462, "str"),
@@ -89,22 +87,13 @@ DETALLE_FIELDS = [
     FieldSpec("porcentaje_participacion_decimal", 479, 480, "int"),
 ]
 
-class ParserFormatError(Exception):
-    pass
-
 class CSV720Error(Exception):
     pass
 
 
 class Parser:
     """Parser and validator for Agencia Tributaria Modelo 720 fixed-width and CSV files."""
-    
-    def __init__(self, encoding: str = "latin-1"):
-        self.encoding = encoding
-    
-    def _slice(self, line: str, start: int, end: int) -> str:
-        """Extract substring from line using 1-based positions."""
-        return line[start - 1 : end]
+        
     
     def _to_int(self, s: str) -> int:
         """Convert string to integer, treating empty as 0."""
@@ -138,11 +127,10 @@ class Parser:
     
     def _parse_field(self, line: str, field_spec: FieldSpec) -> any:
         """Parse a single field from a line based on field specification."""
-        raw_value = self._slice(line, field_spec.start, field_spec.end)
+        raw_value = line[field_spec.start - 1 : field_spec.end]
         
         if field_spec.transform == "str":
-            result = raw_value.rstrip() if raw_value else ""
-            return result if result or not field_spec.required else (None if field_spec.required else "")
+            return raw_value.rstrip() if raw_value else ""
             
         elif field_spec.transform == "int":
             return self._to_int(raw_value)
@@ -177,7 +165,7 @@ class Parser:
             try:
                 result[field_spec.name] = self._parse_field(line, field_spec)
             except Exception as e:
-                raise ParserFormatError(f"Error parsing field '{field_spec.name}': {e}")
+                raise ValueError(f"Error parsing field '{field_spec.name}': {e}")
         return result
     
     def _parse_header(self, line: str) -> Header720:
@@ -190,178 +178,32 @@ class Parser:
         fields = self._parse_line(line, DETALLE_FIELDS)
         return Detalle720(**fields)
     
-    def _iter_lines(self, path_or_stream: Union[str, Iterable[str]]) -> Iterable[str]:
-        """Iterate over lines from file or stream."""
-        if isinstance(path_or_stream, str):
-            with open(path_or_stream, "r", encoding=self.encoding) as f:
-                for ln in f:
-                    yield ln.rstrip("\n\r")
-        else:
-            for ln in path_or_stream:
-                yield ln.rstrip("\n\r")
-    
-    def read_fixed_width(self, path_or_stream: Union[str, Iterable[str]]) -> Declaration:
+    def read_fixed_width(self, file_path: str) -> Declaration:
         """Read Modelo 720 from fixed-width format."""
-        lines = [ln for ln in self._iter_lines(path_or_stream) if ln.strip()]
+        with open(file_path, "r", encoding="ISO-8859-1") as f:
+            lines = [ln.rstrip("\n\r") for ln in f if ln.strip()]
         header = self._parse_header(lines[0])
         detalles = [self._parse_detalle(ln) for ln in lines[1:]]
         return Declaration(header, detalles)
-    
-    def write_csv(self, declaration: Declaration, fp: Union[str, TextIO]):
-        """Write declaration to CSV format."""
-        import csv
-        
-        need_close = False
-        if isinstance(fp, str):
-            f = open(fp, "w", newline="", encoding="utf-8")
-            need_close = True
-        else:
-            f = fp
-        try:
-            w = csv.writer(f)
-            # Header section
-            w.writerow(["__SECTION__", "HEADER"])
-            w.writerow(["field", "value"])
-            h = declaration.header
-            for field_spec in HEADER_FIELDS:
-                if field_spec.csv_include:
-                    value = self._get_header_field_value(h, field_spec)
-                    w.writerow([field_spec.name, value])
-            
-            # Details section  
-            w.writerow(["__SECTION__", "DETALLES"])
-            w.writerow([f.name for f in DETALLE_FIELDS if f.csv_include])
-            for d in declaration.detalles:
-                row = []
-                for field_spec in DETALLE_FIELDS:
-                    if field_spec.csv_include:
-                        value = self._get_detalle_field_value(d, field_spec)
-                        row.append(value)
-                w.writerow(row)
-        finally:
-            if need_close:
-                f.close()
-    
-    def _get_header_field_value(self, header: Header720, field_spec: FieldSpec) -> str:
-        """Get string representation of header field for CSV."""
-        v = getattr(header, field_spec.name)
-        if isinstance(v, bool):
-            return "1" if v else "0"
-        elif isinstance(v, Valoracion):
-            return str(v.importe)
-        else:
-            return "" if v is None else str(v)
-    
-    def _get_detalle_field_value(self, detalle: Detalle720, field_spec: FieldSpec) -> str:
-        """Get string representation of detalle field for CSV."""
-        v = getattr(detalle, field_spec.name)
-        if isinstance(v, Enum):
-            return v.value
-        elif isinstance(v, date):
-            return v.isoformat()
-        elif isinstance(v, Valoracion):
-            return str(v.importe)
-        else:
-            return "" if v is None else str(v)
-    
-    def read_csv(self, fp: Union[str, TextIO]) -> Declaration:
-        """Read declaration from CSV format."""
-        import csv
-        
-        need_close = False
-        if isinstance(fp, str):
-            f = open(fp, "r", newline="", encoding="utf-8")
-            need_close = True
-        else:
-            f = fp
-        try:
-            r = csv.reader(f)
-            rows = list(r)
-        finally:
-            if need_close:
-                f.close()
-        
-        try:
-            header_start = next(i for i, row in enumerate(rows) if row[:2] == ["__SECTION__", "HEADER"]) + 1
-            detalles_start = next(i for i, row in enumerate(rows) if row[:2] == ["__SECTION__", "DETALLES"]) + 1
-        except StopIteration:
-            raise CSV720Error("Missing __SECTION__ markers for HEADER/DETALLES")
-        
-        # Parse header section
-        header_table = rows[header_start:detalles_start-1]
-        if not header_table:
-            raise CSV720Error("Empty header section")
-        if header_table and header_table[0][:2] == ["field", "value"]:
-            header_table = header_table[1:]
-        
-        hvals = {k: v for k, v, *_ in header_table}
-        # Set defaults
-        hvals.setdefault("tipo_registro", "1")
-        hvals.setdefault("modelo", MODEL_CODE)
-        
-        header = self._parse_csv_header(hvals)
-        
-        # Parse details section
-        det_header = rows[detalles_start]
-        expected_columns = [f.name for f in DETALLE_FIELDS if f.csv_include]
-        if det_header != expected_columns:
-            raise CSV720Error("Detalles header row does not match expected columns")
-        
-        det_rows = rows[detalles_start+1:]
-        detalles = []
-        for ridx, row in enumerate(det_rows, start=1):
-            if not any((c or '').strip() for c in row):
-                continue
-            vals = dict(zip(expected_columns, row))
-            detalle = self._parse_csv_detalle(vals, ridx)
-            detalles.append(detalle)
-        
-        dec = Declaration(header, detalles)
-        try:
-            dec.validate()
-        except DeclarationValidationError as e:
-            raise CSV720Error(str(e))
-        return dec
-    
-    def write_fixed_width(self, declaration: Declaration, fp: Union[str, TextIO]):
+
+
+    def write_fixed_width(self, declaration: Declaration, file_path: str):
         """Write declaration to fixed-width Modelo 720 format."""
-        need_close = False
-        if isinstance(fp, str):
-            f = open(fp, "w", encoding="latin-1")
-            need_close = True
-        else:
-            f = fp
-        
-        try:
-            # Write header line
-            header_line = self._format_header_line(declaration.header)
+        with open(file_path, "w", encoding="ISO-8859-1") as f:
+            header_line = self._format_record_line(declaration.header, HEADER_FIELDS)
             f.write(header_line + "\n")
             
-            # Write detail lines
             for detalle in declaration.detalles:
-                detail_line = self._format_detalle_line(detalle)
+                detail_line = self._format_record_line(detalle, DETALLE_FIELDS)
                 f.write(detail_line + "\n")
-                
-        finally:
-            if need_close:
-                f.close()
     
-    def _format_header_line(self, header: Header720) -> str:
-        """Format header record to fixed-width string."""
+    def _format_record_line(self, record: Union[Header720, Detalle720], field_specs: List[FieldSpec]) -> str:
+        """Format a record to fixed-width string using the provided field specifications."""
         line = ""
-        for field_spec in HEADER_FIELDS:
-            value = self._format_field_value(header, field_spec)
+        for field_spec in field_specs:
+            value = self._format_field_value(record, field_spec)
             line += value
         # Pad to exactly 500 characters as required by Spanish tax authority
-        return line.ljust(500)
-    
-    def _format_detalle_line(self, detalle: Detalle720) -> str:
-        """Format detail record to fixed-width string."""
-        line = ""
-        for field_spec in DETALLE_FIELDS:
-            value = self._format_field_value(detalle, field_spec)
-            line += value
-        # Pad to exactly 500 characters as required by Spanish tax authority  
         return line.ljust(500)
     
     def _format_field_value(self, record: Union[Header720, Detalle720], field_spec: FieldSpec) -> str:
@@ -411,6 +253,106 @@ class Parser:
             
         else:
             raise ValueError(f"Unknown field transform: {field_spec.transform}")
+
+
+
+    def write_csv(self, declaration: Declaration, file_path: str):
+        """Write declaration to CSV format."""
+        import csv
+        
+        with open(file_path, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            # Header section
+            w.writerow(["__SECTION__", "HEADER"])
+            w.writerow(["field", "value"])
+            h = declaration.header
+            for field_spec in HEADER_FIELDS:
+                value = self._get_header_field_value(h, field_spec)
+                w.writerow([field_spec.name, value])
+            
+            # Details section  
+            w.writerow(["__SECTION__", "DETALLES"])
+            w.writerow([f.name for f in DETALLE_FIELDS])
+            for d in declaration.detalles:
+                row = []
+                for field_spec in DETALLE_FIELDS:
+                    value = self._get_detalle_field_value(d, field_spec)
+                    row.append(value)
+                w.writerow(row)
+    
+    def _get_header_field_value(self, header: Header720, field_spec: FieldSpec) -> str:
+        """Get string representation of header field for CSV."""
+        v = getattr(header, field_spec.name)
+        if isinstance(v, bool):
+            return "1" if v else "0"
+        elif isinstance(v, Valoracion):
+            return str(v.importe)
+        else:
+            return "" if v is None else str(v)
+    
+    def _get_detalle_field_value(self, detalle: Detalle720, field_spec: FieldSpec) -> str:
+        """Get string representation of detalle field for CSV."""
+        v = getattr(detalle, field_spec.name)
+        if isinstance(v, Enum):
+            return v.value
+        elif isinstance(v, date):
+            return v.isoformat()
+        elif isinstance(v, Valoracion):
+            return str(v.importe)
+        else:
+            return "" if v is None else str(v)
+        
+    
+    def read_csv(self, file_path: str) -> Declaration:
+        """Read declaration from CSV format."""
+        import csv
+        
+        with open(file_path, "r", newline="", encoding="utf-8") as f:
+            r = csv.reader(f)
+            rows = list(r)
+        
+        try:
+            header_start = next(i for i, row in enumerate(rows) if row[:2] == ["__SECTION__", "HEADER"]) + 1
+            detalles_start = next(i for i, row in enumerate(rows) if row[:2] == ["__SECTION__", "DETALLES"]) + 1
+        except StopIteration:
+            raise CSV720Error("Missing __SECTION__ markers for HEADER/DETALLES")
+        
+        # Parse header section
+        header_table = rows[header_start:detalles_start-1]
+        if not header_table:
+            raise CSV720Error("Empty header section")
+        if header_table and header_table[0][:2] == ["field", "value"]:
+            header_table = header_table[1:]
+        
+        hvals = {k: v for k, v, *_ in header_table}
+        # Set defaults
+        hvals.setdefault("tipo_registro", "1")
+        hvals.setdefault("modelo", MODEL_CODE)
+        
+        header = self._parse_csv_header(hvals)
+        
+        # Parse details section
+        det_header = rows[detalles_start]
+        expected_columns = [f.name for f in DETALLE_FIELDS]
+        if det_header != expected_columns:
+            raise CSV720Error("Detalles header row does not match expected columns")
+        
+        det_rows = rows[detalles_start+1:]
+        detalles = []
+        for ridx, row in enumerate(det_rows, start=1):
+            if not any((c or '').strip() for c in row):
+                continue
+            vals = dict(zip(expected_columns, row))
+            detalle = self._parse_csv_detalle(vals, ridx)
+            detalles.append(detalle)
+        
+        dec = Declaration(header, detalles)
+        try:
+            dec.validate()
+        except DeclarationValidationError as e:
+            raise CSV720Error(str(e))
+        return dec
+    
     
     def _parse_csv_header(self, hvals: dict) -> Header720:
         """Parse header from CSV values."""

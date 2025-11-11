@@ -4,7 +4,7 @@ A Python library for parsing and writing Spanish tax authority Modelo 720 declar
 
 ## Overview
 
-Modelo720 provides a clean, type-safe interface for working with Spanish tax form 720 files, which are used to declare foreign assets. The library supports both the official fixed-width format used by the Agencia Tributaria and a proprietary CSV format for easier data entry and analysis.
+Modelo720 provides a type-safe interface for working with Spanish tax form 720 files, which are used to declare foreign assets. The library supports both the official fixed-width format used by the Agencia Tributaria and a proprietary CSV format for easier data entry and analysis.
 
 ## Features
 
@@ -12,8 +12,6 @@ Modelo720 provides a clean, type-safe interface for working with Spanish tax for
 - **Read/Write CSV Files**: Convert to/from a human-readable CSV format
 - **Data Validation**: Comprehensive validation of declaration data
 - **Type Safety**: Full type hints and dataclass-based models
-- **Round-Trip Accuracy**: Perfect fidelity between formats
-- **Clean API**: Simple, intuitive interface following Python conventions
 
 ## Installation
 
@@ -158,16 +156,17 @@ for i, asset in enumerate(declaration.detalles, 1):
 The library defines specific exception types:
 
 - **`DeclarationValidationError`** - Validation failures
-- **`ParserFormatError`** - Fixed-width format parsing errors
 - **`CSV720Error`** - CSV format parsing errors
 
+Fixed-width format parsing errors raise standard `ValueError` exceptions.
+
 ```python
-from Modelo720 import Parser, DeclarationValidationError, ParserFormatError
+from Modelo720 import Parser, DeclarationValidationError
 
 try:
     declaration = parser.read_fixed_width("file.720")
     declaration.validate()
-except ParserFormatError as e:
+except ValueError as e:
     print(f"File format error: {e}")
 except DeclarationValidationError as e:
     print(f"Validation error: {e}")
