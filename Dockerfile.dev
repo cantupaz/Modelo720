@@ -1,52 +1,32 @@
-# must run with docker build --build-arg GITHUB_TOKEN=your_token_here -t option-screener-dev .
+FROM python:3.12-slim
 
-
-FROM mcr.microsoft.com/devcontainers/python:1-3.11
-
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
-# Uninstall pre-installed formatting and linting tools
-# They would conflict with our pinned versions
-# RUN \
-#     pipx uninstall pydocstyle \
-#     && pipx uninstall pycodestyle \
-#     && pipx uninstall mypy \
-#     && pipx uninstall pylint
-
-RUN \
-    curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        # Additional library needed by some tests and accordingly by VScode Tests Discovery
-        git \
-        cmake \
+# Install Node.js and npm
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-RUN pip3 install uv
+WORKDIR /workspace
 
-WORKDIR /usr/src
+# Copy backend requirements and install
+COPY backend/requirements.txt /workspace/backend/
+RUN pip install --no-cache-dir -r /workspace/backend/requirements.txt
 
-# Setup code
-ARG GITHUB_TOKEN
-RUN echo "Token value: [${GITHUB_TOKEN}]"
-RUN if [ -z "${GITHUB_TOKEN}" ]; then echo "TOKEN IS EMPTY"; else echo "TOKEN HAS VALUE"; fi
-RUN git clone --depth 1 https://${GITHUB_TOKEN}:x-oauth-basic@github.com/cantupaz/Modelo720
+# Copy frontend package.json and install (this will be done at runtime for dev)
+COPY frontend/package.json frontend/package-lock.json* /workspace/frontend/
+RUN cd /workspace/frontend && npm install
 
-RUN sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
+# Copy the entire project
+COPY . /workspace/
 
+# Expose ports
+EXPOSE 8000 5173
 
-USER vscode
-ENV VIRTUAL_ENV="/home/vscode/.local/os-venv"
-RUN uv venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-WORKDIR /tmp
-
-# Install Python dependencies from requirements
-COPY requirements.txt ./
-RUN uv pip install -r requirements.txt
+# Default command runs both backend and frontend
+CMD ["sh", "-c", "cd /workspace/backend && python run.py & cd /workspace/frontend && npm run dev"]
 
 WORKDIR /workspaces
 
