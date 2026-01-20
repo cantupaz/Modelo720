@@ -1,0 +1,8 @@
+include README.md
+include LICENSE
+include requirements.txt
+include example.720
+include example.csv
+include example-rewritten.720
+recursive-include Modelo720 *.py
+recursive-include Modelo720 py.typed

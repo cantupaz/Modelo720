@@ -1,5 +1,77 @@
+# Environment and secrets
 .env
 secrets.yaml
-__pycache*
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data files (examples are kept)
 *720
 *csv
+!example.720
+!example.csv
+!example-rewritten.720
+
+# Old files
+OLD_README.md
+
+# Application-specific (moved to Modelo720app)
+frontend/
+backend/
+compose.yaml
+compose.debug.yaml
+docker-compose.dev.yml
+DEV_CONTAINER_GUIDE.md
+DEV_CONTAINER_QUICKREF.md
+start-dev.sh
+quick-start.sh
+Dockerfile
+Dockerfile.dev
+Modelo720.code-workspace
+

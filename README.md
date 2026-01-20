@@ -15,8 +15,24 @@ Modelo720 provides a type-safe interface for working with Spanish tax form 720 f
 
 ## Installation
 
+### From PyPI (when published)
+
 ```bash
-pip install -r requirements.txt
+pip install modelo720
+```
+
+### From Source
+
+```bash
+git clone https://github.com/yourusername/Modelo720.git
+cd Modelo720
+pip install -e .
+```
+
+For development:
+
+```bash
+pip install -e ".[dev]"
 ```
 
 ## Quick Start
@@ -27,7 +43,7 @@ from Modelo720 import Parser, Declaration
 # Create a parser instance
 parser = Parser()
 
-# Read a fixed-width Modelo 720 file (your last year's file, for example)
+# Read a fixed-width Modelo 720 file
 declaration = parser.read_fixed_width("my_declaration.720")
 
 # Validate the declaration
@@ -40,12 +56,10 @@ except DeclarationValidationError as e:
 # Convert to CSV for easier viewing/editing
 parser.write_csv(declaration, "declaration.csv")
 
-# Edit declaracion.csv with new data
-
 # Read back from CSV
 declaration2 = parser.read_csv("declaration.csv")
 
-# Write back to official format to file with Hacienda
+# Write back to official format
 parser.write_fixed_width(declaration2, "output.720")
 ```
 
@@ -61,10 +75,10 @@ parser = Parser()
 
 #### Methods
 
-- **`read_fixed_width(file_path)`** - Read official .720 format
-- **`write_fixed_width(declaration, file_path)`** - Write official .720 format  
-- **`read_csv(file_path)`** - Read proprietary CSV format
-- **`write_csv(declaration, file_path)`** - Write proprietary CSV format
+- **`read_fixed_width(file_path: str) -> Declaration`** - Read official .720 format
+- **`write_fixed_width(declaration: Declaration, file_path: str)`** - Write official .720 format  
+- **`read_csv(file_path: str) -> Declaration`** - Read proprietary CSV format
+- **`write_csv(declaration: Declaration, file_path: str)`** - Write proprietary CSV format
 
 ### Data Models
 
@@ -98,108 +112,56 @@ Validation includes:
 
 The official format used by the Agencia Tributaria:
 - 500 character fixed-width lines
-- ISO-8859-1 encoding
-- Specific field positions and formats
-- Header line (registro 1) followed by detail lines (registro tipo 2)
+- Type 1: Header record (one per file)
+- Type 2: Detail records (one per asset)
 
 ### CSV Format
 
-A proprietary CSV format for easier data manipulation:
-- UTF-8 encoding
-- Section-based structure (`__SECTION__` markers)
-- Human-readable field names
-- ISO date formats
+A more human-readable format for data entry:
+- Header row with column names
+- One row per declaration component
+- Easier to edit in spreadsheet software
 
+## Examples
 
-## Error Handling
+See the `example.720` and `example.csv` files in the repository for sample data, and `main.py` for a complete usage example.
 
-The library defines specific exception types:
+## Testing
 
-- **`DeclarationValidationError`** - Validation failures
-- **`CSV720Error`** - CSV format parsing errors
+Run the test suite:
 
-Fixed-width format parsing errors raise standard `ValueError` exceptions.
+```bash
+pytest
+```
 
-```python
-from Modelo720 import Parser, DeclarationValidationError
+With coverage:
 
-try:
-    declaration = parser.read_fixed_width("file.720")
-    declaration.validate()
-except ValueError as e:
-    print(f"File format error: {e}")
-except DeclarationValidationError as e:
-    print(f"Validation error: {e}")
+```bash
+pytest --cov=Modelo720 --cov-report=html
 ```
 
 ## Development
 
-### Running Tests
+This is a pure Python library with no external runtime dependencies except Pydantic. For development:
 
-```bash
-python -m unittest test_modelo720.py -v
-```
+1. Clone the repository
+2. Install with dev dependencies: `pip install -e ".[dev]"`
+3. Make your changes
+4. Run tests: `pytest`
+5. Submit a pull request
 
-### Project Structure
+## Related Projects
 
-```
-Modelo720/
-├── Modelo720/
-│   ├── __init__.py          # Package exports
-│   ├── parser.py            # Main Parser class
-│   └── declaracion.py       # Data models and validation
-├── main.py                  # Example usage
-├── test_modelo720.py        # Unit tests
-└── README.md               # This file
-```
-
-## Asset Types
-
-The library supports all Modelo 720 asset types:
-
-- **C** - Bank accounts and credit (Cuentas bancarias)
-- **V** - Securities and rights (Valores y derechos)  
-- **I** - Real estate (Inmuebles)
-- **S** - Insurance (Seguros)
-- **B** - Movable goods (Bienes muebles)
-
-## Contributing
-
-Contributions are welcome! Please contact me before implementing anything, so we can discuss.
-
-For contributions, ensure:
-
-1. All tests pass: `python -m unittest test_modelo720.py`
-2. Code follows existing style conventions
-3. New features include appropriate tests
-4. Documentation is updated for API changes
+- [Modelo720app](https://github.com/yourusername/Modelo720app) - Web application with FastAPI backend and Vue.js frontend for working with Modelo 720 files
 
 ## License
 
-MIT License
+MIT License - see LICENSE file for details
 
-Copyright (c) 2025
+## Contributing
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+## Support
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-## Related
-
-- [Agencia Tributaria](https://www.agenciatributaria.es/) - Spanish tax authority
-- [Modelo 720 Information](https://www.agenciatributaria.es/AEAT.internet/en_gb/Inicio/Ayuda/Manuales__Folletos_y_Videos/Manuales_practicos/Modelo_720/Modelo_720.shtml) - Official documentation
-- [Spec for Modelo 720 files](https://sede.agenciatributaria.gob.es/static_files/Sede/Disenyo_registro/DR_Resto_Mod/archivos/modelo_720.pdf) - Spec is also included in this repo since it doesn't seem to be versioned.
+For issues and questions, please use the GitHub issue tracker.
