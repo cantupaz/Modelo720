@@ -1,34 +1,27 @@
 FROM python:3.12-slim
 
-# Install Node.js and npm
-RUN apt-get update && apt-get install -y \
-    curl \
-    git \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace
+
+# Copy requirements and install
+COPY requirements.txt /workspace/
+RUN pip install --no-cache-dir -r /workspace/requirements.txt
+
+# Install dev dependencies
+RUN pip install --no-cache-dir pytest pytest-cov
+
+# Copy the library code
+COPY Modelo720/ /workspace/Modelo720/
+COPY main.py test_modelo720.py /workspace/
+COPY example.720 example.csv example-rewritten.720 /workspace/
+
+# Install library in editable mode
+COPY pyproject.toml MANIFEST.in /workspace/
+RUN pip install -e /workspace
 
 WORKDIR /workspace
 
-# Copy backend requirements and install
-COPY backend/requirements.txt /workspace/backend/
-RUN pip install --no-cache-dir -r /workspace/backend/requirements.txt
-
-# Copy frontend package.json and install (this will be done at runtime for dev)
-COPY frontend/package.json frontend/package-lock.json* /workspace/frontend/
-RUN cd /workspace/frontend && npm install
-
-# Copy the entire project
-COPY . /workspace/
-
-# Expose ports
-EXPOSE 8000 5173
-
-# Default command runs both backend and frontend
-CMD ["sh", "-c", "cd /workspace/backend && python run.py & cd /workspace/frontend && npm run dev"]
-
-WORKDIR /workspaces
-
 # Set the default shell to bash instead of sh
 ENV SHELL /bin/bash
+
+# Default command runs tests
+CMD ["pytest"]
