@@ -1,7 +1,9 @@
 {
-	"name": "Modelo 720 Dev Container",
-	"dockerComposeFile": "../docker-compose.dev.yml",
-	"service": "dev",
+	"name": "Modelo720 Library Dev Container",
+	"build": {
+		"dockerFile": "../Dockerfile.dev",
+		"context": ".."
+	},
 	"workspaceFolder": "/workspace",
 	
 	"customizations": {
@@ -9,9 +11,6 @@
 			"extensions": [
 				"ms-python.python",
 				"ms-python.vscode-pylance",
-				"Vue.volar",
-				"dbaeumer.vscode-eslint",
-				"esbenp.prettier-vscode",
 				"ms-azuretools.vscode-docker"
 			],
 			"settings": {
@@ -21,29 +20,15 @@
 				"python.linting.pylintEnabled": false,
 				"python.formatting.provider": "black",
 				"editor.formatOnSave": true,
-				"[vue]": {
-					"editor.defaultFormatter": "Vue.volar"
-				},
-				"[javascript]": {
-					"editor.defaultFormatter": "esbenp.prettier-vscode"
-				}
+				"python.testing.pytestEnabled": true,
+				"python.testing.pytestArgs": [
+					"."
+				]
 			}
 		}
 	},
 
-	"forwardPorts": [8000, 5173],
-	"portsAttributes": {
-		"8000": {
-			"label": "Backend API",
-			"onAutoForward": "notify"
-		},
-		"5173": {
-			"label": "Frontend Dev Server",
-			"onAutoForward": "openBrowser"
-		}
-	},
-
-	"postCreateCommand": "chmod +x /workspace/start-dev.sh && echo 'Dev container ready! Run: ./start-dev.sh'",
+	"postCreateCommand": "pip install -e . && echo 'Modelo720 library dev container ready!'",
 	
 	"remoteUser": "root"
 }
