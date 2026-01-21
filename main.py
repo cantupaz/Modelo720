@@ -3,7 +3,7 @@ from Modelo720 import Parser, DeclarationValidationError
 
 parser = Parser()
 
-# Read fixed-width file 
+# Read fixed-width file
 dec = parser.read_fixed_width("example.720")
 try:
     dec.validate()
@@ -27,4 +27,3 @@ else:
     raise RuntimeError("Declarations differ after round-trip conversion.")
 
 dec2.print_declaration()
-

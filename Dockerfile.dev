@@ -1,27 +1,38 @@
-FROM python:3.12-slim
 
-WORKDIR /workspace
 
-# Copy requirements and install
-COPY requirements.txt /workspace/
-RUN pip install --no-cache-dir -r /workspace/requirements.txt
+FROM mcr.microsoft.com/devcontainers/python:1-3.13
+
+WORKDIR /workspaces
+
+# Setup code
+ARG GITHUB_TOKEN
+RUN echo "Token value: [${GITHUB_TOKEN}]"
+RUN if [ -z "${GITHUB_TOKEN}" ]; then echo "TOKEN IS EMPTY"; else echo "TOKEN HAS VALUE"; fi
+RUN git clone --depth 1 https://${GITHUB_TOKEN}:x-oauth-basic@github.com/cantupaz/Modelo720 /workspaces/Modelo720
+
+
+RUN pip3 install uv
+
+USER vscode
+ENV VIRTUAL_ENV="/home/vscode/.local/os-venv"
+RUN uv venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install dev dependencies
-RUN pip install --no-cache-dir pytest pytest-cov
+WORKDIR /workspaces/Modelo720
+RUN uv pip install -r requirements.txt
 
-# Copy the library code
-COPY Modelo720/ /workspace/Modelo720/
-COPY main.py test_modelo720.py /workspace/
-COPY example.720 example.csv example-rewritten.720 /workspace/
+
+
 
 # Install library in editable mode
-COPY pyproject.toml MANIFEST.in /workspace/
-RUN pip install -e /workspace
+# COPY pyproject.toml MANIFEST.in /workspaces/
+# RUN pip install -e /workspaces
 
-WORKDIR /workspace
+WORKDIR /workspaces
 
 # Set the default shell to bash instead of sh
 ENV SHELL /bin/bash
 
 # Default command runs tests
-CMD ["pytest"]
+# CMD ["pytest"]
