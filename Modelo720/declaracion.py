@@ -300,7 +300,7 @@ class Detalle720(BaseModel):
     def validate_nif_declarante(cls, v):
         """Validate NIF format for nif_declarante."""
         if not validar_nif(v):
-            raise ValueError(f"Invalid NIF format for nif_declarante: {v}")
+            raise ValueError(f"Formato de NIF inválido para nif_declarante: {v}")
         return v.upper().strip()
 
     @field_validator("nif_declarado")
@@ -308,7 +308,7 @@ class Detalle720(BaseModel):
     def validate_nif_declarado(cls, v):
         """Validate NIF format for nif_declarado."""
         if v and not validar_nif(v):
-            raise ValueError(f"Invalid NIF format for nif_declarado: {v}")
+            raise ValueError(f"Formato de NIF inválido para nif_declarado: {v}")
         return v.upper().strip() if v else v
 
     @field_validator("nif_representante")
@@ -316,7 +316,7 @@ class Detalle720(BaseModel):
     def validate_nif_representante(cls, v):
         """Validate NIF format for nif_representante."""
         if v and not validar_nif(v):
-            raise ValueError(f"Invalid NIF format for nif_representante: {v}")
+            raise ValueError(f"Formato de NIF inválido para nif_representante: {v}")
         return v.upper().strip() if v else v
 
     @model_validator(mode="after")
