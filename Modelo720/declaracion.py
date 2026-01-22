@@ -23,15 +23,15 @@ def validar_nif(nif: str) -> bool:
         letra_control = nif[8]
         tabla = "TRWAGMYFPDXBNJZSQVHLCKE"
         return tabla[numero % 23] == letra_control
-    elif len(nif) == 9 and nif[0] in "XYZ" and nif[1:8].isdigit():
+    if len(nif) == 9 and nif[0] in "XYZ" and nif[1:8].isdigit():
         # Caso NIE
         reemplazo = {"X": "0", "Y": "1", "Z": "2"}
         num_nie = reemplazo[nif[0]] + nif[1:8]
         letra_control = nif[8]
         tabla = "TRWAGMYFPDXBNJZSQVHLCKE"
         return tabla[int(num_nie) % 23] == letra_control
-    else:
-        return False
+
+    return False
 
 
 class DeclarationValidationError(Exception):
@@ -59,7 +59,9 @@ class Origen(str, Enum):
 class Valoracion(BaseModel):
     """Represents a valuation with a sign and an amount."""
 
-    signo: str
+    signo: Literal[" ", "N"] = Field(
+        description="Signo (' ' para positivo, 'N' para negativo)"
+    )
     importe: Decimal
 
     model_config = {"arbitrary_types_allowed": True}
