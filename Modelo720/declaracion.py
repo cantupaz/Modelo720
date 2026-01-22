@@ -4,7 +4,7 @@ from enum import Enum
 
 from decimal import Decimal
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -70,7 +70,9 @@ class Valoracion(BaseModel):
 class Header720(BaseModel):
     """Represents a header record in the Modelo 720 declaration."""
 
-    tipo_registro: int
+    tipo_registro: Literal[1] = Field(
+        description="Tipo de registro (debe ser 1 para registros de encabezado)"
+    )
     modelo: str
     ejercicio: int
     nif_declarante: str
@@ -87,13 +89,6 @@ class Header720(BaseModel):
     suma_valoracion_2: Valoracion
 
     model_config = {"arbitrary_types_allowed": True}
-
-    @field_validator("tipo_registro")
-    @classmethod
-    def validate_tipo_registro(cls, v):
-        if v != 1:
-            raise ValueError("Header tipo_registro must be 1")
-        return v
 
     @field_validator("nif_declarante")
     @classmethod
@@ -120,52 +115,129 @@ class Header720(BaseModel):
 class Detalle720(BaseModel):
     """Represents a detail record in the Modelo 720 declaration."""
 
-    tipo_registro: int
-    modelo: str
-    ejercicio: int
-    nif_declarante: str
-    nif_declarado: str
-    nif_representante: str
-    nombre_razon_declarado: str
-    clave_condicion: int
-    tipo_titularidad_texto: str
-    clave_tipo_bien: ClaveBien
-    subclave: int
-    tipo_derecho_real_inmueble: str
-    codigo_pais: str
-    clave_identificacion: int
-    identificacion_valores: str
-    clave_ident_cuenta: str
-    codigo_bic: str
-    codigo_cuenta: str
-    identificacion_entidad: str
-    nif_entidad_pais_residencia: str
-    domicilio_via_num: str
-    domicilio_complemento: str
-    domicilio_poblacion: str
-    domicilio_region: str
-    domicilio_cp: str
-    domicilio_pais: str
-    fecha_incorporacion: Optional[date] = None
-    origen: Origen
-    fecha_extincion: Optional[date] = None
-    valoracion_1: Valoracion
-    valoracion_2: Valoracion
-    clave_repr_valores: str
-    numero_valores_entera: int
-    numero_valores_decimal: int
-    clave_tipo_bien_inmueble: str
-    porcentaje_participacion_entera: int
-    porcentaje_participacion_decimal: int
+    tipo_registro: Literal[2] = Field(
+        description="Tipo de registro (constante 2 para registros de detalle)"
+    )
+    modelo: Literal["720"] = Field(
+        max_length=3,
+        description="Modelo de la declaración (constante 720)",
+    )
+    ejercicio: int = Field(description="Ejercicio fiscal")
+    nif_declarante: str = Field(
+        max_length=9,
+        description="NIF del declarante",
+    )
+    nif_declarado: str = Field(
+        max_length=9,
+        description="NIF de la persona declarada",
+    )
+    nif_representante: str = Field(
+        max_length=9,
+        description="NIF del representante legal",
+    )
+    nombre_razon_declarado: str = Field(
+        max_length=40,
+        description="Nombre, razón social o denominación de la persona declarada",
+    )
+    clave_condicion: int = Field(
+        ge=1,
+        le=8,
+        description="Código de condición del declarante (1-8)",
+    )
+    tipo_titularidad_texto: str = Field(
+        max_length=25,
+        description="Tipo de titularidad sobre el bien o derecho",
+    )
+    clave_tipo_bien: ClaveBien = Field(description="Clave de tipo de bien o derecho")
+    subclave: int = Field(description="Subclave de bien o derecho")
+    tipo_derecho_real_inmueble: str = Field(
+        max_length=25,
+        description="Tipo de derecho real sobre inmueble",
+    )
+    codigo_pais: str = Field(
+        max_length=2,
+        description="Código de país",
+    )
+    clave_identificacion: int = Field(description="Clave de identificación")
+    identificacion_valores: str = Field(
+        max_length=12,
+        description="Identificación de valores",
+    )
+    clave_ident_cuenta: str = Field(
+        max_length=1,
+        description="Clave identificación de cuenta",
+    )
+    codigo_bic: str = Field(
+        max_length=11,
+        description="Código BIC",
+    )
+    codigo_cuenta: str = Field(
+        max_length=34,
+        description="Código de cuenta",
+    )
+    identificacion_entidad: str = Field(
+        max_length=41,
+        description="Identificación de la entidad",
+    )
+    nif_entidad_pais_residencia: str = Field(
+        max_length=20,
+        description="Número de identificación fiscal en el país de residencia fiscal",
+    )
+    domicilio_via_num: str = Field(
+        max_length=52,
+        description="Nombre vía pública y número de casa",
+    )
+    domicilio_complemento: str = Field(
+        max_length=40,
+        description="Complemento",
+    )
+    domicilio_poblacion: str = Field(
+        max_length=30,
+        description="Población/Ciudad",
+    )
+    domicilio_region: str = Field(
+        max_length=30,
+        description="Provincia/Región/Estado",
+    )
+    domicilio_cp: str = Field(
+        max_length=10,
+        description="Código postal (ZIP code)",
+    )
+    domicilio_pais: str = Field(
+        max_length=2,
+        description="Código país",
+    )
+    fecha_incorporacion: Optional[date] = Field(
+        default=None, description="Fecha de incorporación"
+    )
+    origen: Origen = Field(description="Origen del bien o derecho")
+    fecha_extincion: Optional[date] = Field(
+        default=None, description="Fecha de extinción"
+    )
+    valoracion_1: Valoracion = Field(
+        description="Valoración 1: Saldo o valor a 31 de diciembre; "
+        "saldo o valor en la fecha de extinción; valor de adquisición"
+    )
+    valoracion_2: Valoracion = Field(
+        description="Valoración 2: Importe o valor de la transmisión; "
+        "saldo medio último trimestre"
+    )
+    clave_repr_valores: str = Field(
+        max_length=1, description="Clave de representación de valores"
+    )
+    numero_valores_entera: int = Field(description="Número de valores (parte entera)")
+    numero_valores_decimal: int = Field(description="Número de valores (parte decimal)")
+    clave_tipo_bien_inmueble: str = Field(
+        max_length=1, description="Clave tipo de bien inmueble"
+    )
+    porcentaje_participacion_entera: int = Field(
+        description="Porcentaje de participación (parte entera)"
+    )
+    porcentaje_participacion_decimal: int = Field(
+        description="Porcentaje de participación (parte decimal)"
+    )
 
     model_config = {"arbitrary_types_allowed": True}
-
-    @field_validator("tipo_registro")
-    @classmethod
-    def validate_tipo_registro(cls, v):
-        if v != 2:
-            raise ValueError("Detail tipo_registro must be 2")
-        return v
 
     @field_validator("nif_declarante")
     @classmethod
