@@ -1,10 +1,11 @@
 """
 Parser and Writer for Agencia Tributaria Modelo 720 fixed-width and proprietary CSV files.
 
-The fixed-width format is the official format used by the Agencia Tributaria for Modelo 720 declarations.
+The fixed-width format is the official format used by the Agencia Tributaria
+for Modelo 720 declarations.
 
-The proprietary CSV format is an alternative format that is intended as an easy way to enter and read data.
-The CSV format preserves all data fields and structure.
+The proprietary CSV format is an alternative format that is intended as an easy way
+to enter and read data. The CSV format preserves all data fields and structure.
 
 """
 
@@ -36,7 +37,7 @@ class FieldSpec:
     name: str
     start: int  # 1-based position in fixed-width line
     end: int  # 1-based position in fixed-width line
-    transform: str  # Transform type: "int", "str", "date8", "decimal_cents", "bool_c", "bool_s", "enum"
+    transform: str  # type: "int", "str", "date8", "decimal_cents", "bool_c", "bool_s", "enum"
     enum_class: Optional[type] = None  # For enum transforms
 
 
@@ -101,7 +102,7 @@ DETALLE_FIELDS = [
 
 
 class CSV720Error(Exception):
-    pass
+    """Exception raised for errors in the CSV 720 format."""
 
 
 class Parser:
@@ -164,7 +165,8 @@ class Parser:
 
         elif field_spec.transform == "valoracion":
             # Handle valoracion fields (sign + amount)
-            # For fixed-width, this represents sign + 17 digits (valoracion uses positions like 145-162)
+            # For fixed-width, this represents sign + 17 digits
+            # (valoracion uses positions like 145-162)
             sign_char = raw_value[0] if raw_value else " "
             amount_str = raw_value[1:] if len(raw_value) > 1 else ""
             return Valoracion(

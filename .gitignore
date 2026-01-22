@@ -52,8 +52,8 @@ htmlcov/
 Thumbs.db
 
 # Data files (examples are kept)
-*720
-*csv
+*.720
+*.csv
 !example.720
 !example.csv
 !example-rewritten.720

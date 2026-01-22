@@ -1,3 +1,5 @@
+"""Sample usage of the Modelo720 parser and declaration validation."""
+
 from Modelo720 import Parser, DeclarationValidationError
 
 
